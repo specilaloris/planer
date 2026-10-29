@@ -4,6 +4,7 @@
 #   TELEGRAM_BOT_TOKEN  — токен бота от @BotFather
 #   TELEGRAM_CHAT_ID    — ваш id в Telegram (узнать у @userinfobot)
 # Если хранилище называется не planer-data, создайте переменную DATA_REPO = логин/название.
+# Утренняя сводка (план на день и сроки) приходит в 8:00 и закрепляется в чате. Другое время: переменная DIGEST_TIME = 07:30, выключить: off.
 # Журнал запусков в публичном репозитории виден всем, поэтому названия дел в него не пишутся.
 
 name: Напоминания в Telegram
@@ -35,6 +36,7 @@ jobs:
       TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
       TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+      DIGEST_TIME: ${{ vars.DIGEST_TIME || '08:00' }}
     steps:
       - name: Отправить напоминания
         shell: bash
@@ -106,6 +108,35 @@ jobs:
             const when=t.date===today?(t.time?"Сегодня в "+t.time:"Сегодня"):(Number(t.date.slice(8))+" "+MON[Number(t.date.slice(5,7))-1]+(t.time?" в "+t.time:""));
             const text=["⏰ "+t.title,when+" · "+(CAT[t.cat]||"Личное"),t.note||""].filter(Boolean).join("\n");
             if(await tg(text)){sent[key]=now;changed=true;ok++}
+          }
+          // утренняя сводка: раз в день после DIGEST_TIME, закрепляется в чате (видна в виджете Telegram)
+          const DIG=String(process.env.DIGEST_TIME||"08:00").trim();
+          if(/^\d{1,2}:\d{2}$/.test(DIG)){
+            const nd=new Date(),[dh,dm]=DIG.split(":").map(Number),mins=nd.getHours()*60+nd.getMinutes(),dk="digest@"+today;
+            const inWindow=mins>=dh*60+dm&&mins<dh*60+dm+180;
+            if(TEST==="true"||(!sent[dk]&&inWindow)){
+              const DOWN=["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+              const hd=s=>Number(s.slice(8))+" "+MON[Number(s.slice(5,7))-1];
+              const q=new Date();q.setDate(q.getDate()+3);const lim3=iso(q);
+              const isTask=t=>t&&!t.deleted&&(!t.kind||t.kind==="task");
+              const list=items.filter(t=>isTask(t)&&t.date&&occurs(t,today)&&!((t.repeat&&t.repeat.freq)?(t.doneDates||[]).includes(today):t.done))
+                .sort((a,b)=>(a.time||"99").localeCompare(b.time||"99"));
+              const dls=items.filter(t=>isTask(t)&&t.due&&!t.done&&!(t.repeat&&t.repeat.freq)&&t.due<=lim3)
+                .sort((a,b)=>(a.due+(a.dueTime||"99")).localeCompare(b.due+(b.dueTime||"99")));
+              const L=["☀️ План на "+hd(today)+", "+DOWN[nd.getDay()]];
+              if(list.length)for(const t of list)L.push("• "+(t.time?t.time+" ":"")+t.title+" · "+(CAT[t.cat]||"Личное"));
+              else L.push("Дел на сегодня нет.");
+              if(dls.length){L.push("","🚩 Сроки:");for(const t of dls)L.push("• "+(t.due<today?"просрочено: ":t.due===today?"сегодня: ":hd(t.due)+": ")+t.title+(t.dueTime?" (до "+t.dueTime+")":""))}
+              const api2=m=>`https://api.telegram.org/bot${TG_TOKEN}/${m}`;
+              const post=(m,b)=>fetch(api2(m),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:TG_CHAT,...b})});
+              const r=await post("sendMessage",{text:L.join("\n"),disable_web_page_preview:true});
+              if(r.ok){
+                const j=await r.json();
+                if(TEST!=="true"){sent[dk]=now;changed=true}
+                try{await post("unpinAllChatMessages",{});if(j.result&&j.result.message_id)await post("pinChatMessage",{message_id:j.result.message_id,disable_notification:true})}catch(e){}
+              }
+              console.log("Утренняя сводка:",r.ok?"отправлена":"не отправилась ("+r.status+")");
+            }
           }
           for(const k of Object.keys(sent))if(sent[k]<now-3*864e5){delete sent[k];changed=true}
           if(changed){
