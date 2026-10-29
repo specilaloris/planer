@@ -69,12 +69,36 @@ jobs:
           const state=await get("notified.json");const sent=state.data||{};
           const now=Date.now(),today=iso(new Date());
           const due=[];
+          const fromIso=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+          const dim=(y,m)=>new Date(y,m+1,0).getDate();
+          function occurs(t,d){
+            const rp=t.repeat;if(!rp||!rp.freq)return t.date===d;
+            if(d<t.date||(rp.until&&d>rp.until)||(t.skipDates||[]).includes(d))return false;
+            const s=fromIso(t.date),x=fromIso(d),dw=x.getDay();
+            if(rp.freq==="daily")return true;
+            if(rp.freq==="weekdays")return dw>=1&&dw<=5;
+            if(rp.freq==="weekly"||rp.freq==="biweekly"){
+              const days=rp.days&&rp.days.length?rp.days:[s.getDay()];if(!days.includes(dw))return false;
+              if(rp.freq==="weekly")return true;
+              const mon=z=>{const q=new Date(z);q.setDate(q.getDate()-((q.getDay()+6)%7));return q};
+              return Math.round((mon(x)-mon(s))/6048e5)%2===0;
+            }
+            if(rp.freq==="monthly")return x.getDate()===Math.min(s.getDate(),dim(x.getFullYear(),x.getMonth()));
+            if(rp.freq==="yearly")return x.getMonth()===s.getMonth()&&x.getDate()===Math.min(s.getDate(),dim(x.getFullYear(),x.getMonth()));
+            return false;
+          }
+          const dates=[-1,0,1].map(o=>{const q=new Date();q.setDate(q.getDate()+o);return iso(q)});
           for(const t of items){
-            if(!t||t.deleted||t.done||(t.kind&&t.kind!=="task")||!t.date)continue;
+            if(!t||t.deleted||(t.kind&&t.kind!=="task")||!t.date)continue;
             const rem=typeof t.remind==="number"?t.remind:(t.time?15:-1);if(rem<0)continue;
-            const [y,m,d]=t.date.split("-").map(Number),[h,mi]=(t.time||"09:00").split(":").map(Number);
-            const at=new Date(y,m-1,d,h,mi).getTime()-rem*60000,key=t.id+"@"+at;
-            if(at<=now&&at>now-6*3600e3&&!sent[key])due.push({t,at,key});
+            const series=!!(t.repeat&&t.repeat.freq);
+            for(const day of dates){
+              if(!occurs(t,day))continue;
+              if(series?(t.doneDates||[]).includes(day):t.done)continue;
+              const [y,m,d]=day.split("-").map(Number),[h,mi]=(t.time||"09:00").split(":").map(Number);
+              const at=new Date(y,m-1,d,h,mi).getTime()-rem*60000,key=t.id+"@"+at;
+              if(at<=now&&at>now-6*3600e3&&!sent[key])due.push({t:{...t,date:day},at,key});
+            }
           }
           due.sort((a,b)=>a.at-b.at);
           let changed=false,ok=0;
