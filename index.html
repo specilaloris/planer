@@ -272,6 +272,13 @@ body.wmode .bnav{display:none}
   .task{grid-template-columns:auto 44px 1fr auto;gap:8px}
   .form{grid-template-columns:1fr}
 }
+.pipw{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.pipw .wg-date .big{font-size:38px}
+.pipw .wg-list{gap:6px}
+.pipw .wg-list li{font-size:14px;grid-template-columns:4px 46px 1fr}
+.wgp .steps code,.wgp .hint code{font-family:var(--f-mono);font-size:12px;background:var(--sunk);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.wgp .field .row{margin-bottom:2px}
+.wgp .os{font-family:var(--f-display);font-size:16px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--fg)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -443,13 +450,39 @@ body.wmode .bnav{display:none}
         <div class="mini" id="miniW"></div>
         <a class="btn" href="#widget" style="align-self:flex-start">Открыть виджет</a>
       </div>
+    </div>
+  </div>
+
+  <div class="panel wgp" id="wgPanel">
+    <div class="ag-head"><h2 style="font-size:18px">Виджет на компьютере и телефоне</h2></div>
+    <p class="hint" id="wgOnlyGh" style="margin:0" hidden>Кнопки ниже работают в версии планера на GitHub. Откройте её и зайдите в Настройки там.</p>
+    <div class="wset">
       <div class="field">
-        <span class="lbl">Как закрепить на телефоне</span>
+        <span class="os">Windows</span>
+        <div class="row wg-act"><button class="btn primary" id="pipBtn">Поверх всех окон</button><button class="btn" id="winCmd">Скачать ярлык</button></div>
         <ol class="steps">
-          <li>Нажмите «Открыть виджет» и откройте эту страницу в браузере телефона.</li>
-          <li><b>Android (Chrome):</b> меню ⋮ → «Добавить на главный экран».</li>
-          <li><b>iPhone (Safari):</b> «Поделиться» → «На экран Домой».</li>
-          <li>Для живого виджета с напоминаниями: «Экспорт в календарь», затем виджет стандартного Календаря.</li>
+          <li><b>Поверх всех окон</b> открывает маленькое окошко с делами, которое не прячется за другими программами. Работает в Chrome и Edge, пока планер открыт.</li>
+          <li><b>Ярлык</b> открывает виджет отдельным окном без адресной строки. Дважды нажмите на скачанный файл.</li>
+          <li>Чтобы виджет появлялся сам при включении компьютера: нажмите Win+R, введите <code>shell:startup</code>, Enter, и перенесите ярлык в открывшуюся папку.</li>
+        </ol>
+      </div>
+      <div class="field">
+        <span class="os">iPhone</span>
+        <div class="row wg-act"><button class="btn primary" id="iosCopy">Скопировать скрипт</button><button class="btn" id="iosSave">Скачать .js</button></div>
+        <ol class="steps">
+          <li>Установите бесплатное приложение <b>Scriptable</b> из App Store.</li>
+          <li>Скопируйте скрипт и перешлите себе на iPhone, например в «Избранное» Telegram.</li>
+          <li>В Scriptable нажмите «+», вставьте текст, назовите скрипт «Планер» и нажмите ▶. Он попросит токен GitHub: вставьте тот же, что в синхронизации.</li>
+          <li>Долгое нажатие на главный экран → «+» → Scriptable → средний или большой виджет. Нажмите на виджет → Script → «Планер».</li>
+        </ol>
+      </div>
+      <div class="field">
+        <span class="os">Android</span>
+        <ol class="steps">
+          <li>Android не даёт сайтам ставить свои виджеты, поэтому виджетом служит Telegram. Каждое утро в 8:00 бот присылает план на день и сроки и закрепляет его в чате.</li>
+          <li>Долгое нажатие на главный экран → Виджеты → Telegram → выберите чат с ботом. В виджете видно последнее сообщение бота.</li>
+          <li>Сводка работает, когда подключены напоминания в Telegram. Время меняется переменной <code>DIGEST_TIME</code> в репозитории.</li>
+          <li>Для быстрого входа: Chrome ⋮ → «Установить приложение», затем долгое нажатие на значок → «Сегодня».</li>
         </ol>
       </div>
     </div>
@@ -497,7 +530,7 @@ body.wmode .bnav{display:none}
   <div class="widget">
     <div class="wg-date"><span class="big mono" id="wgDay"></span><span class="rest" id="wgRest"></span></div>
     <div id="wgBody"></div>
-    <a href="#" class="btn" style="align-self:flex-start">Открыть планер</a>
+    <div class="row"><a href="#" class="btn">Открыть планер</a><button class="btn" id="wgPip" hidden>Поверх всех окон</button></div>
   </div>
 </div>
 </div>
@@ -756,6 +789,7 @@ const PH={
 
 /* ---------- render ---------- */
 function render(){
+  renderPip();
   if(location.hash==="#widget"){renderWidget();return}
   document.body.classList.remove("wmode");$("#main").hidden=false;$("#wview").hidden=true;
   const t=today(),cur=tab();
@@ -770,7 +804,7 @@ function render(){
   if(cur==="cal"){renderCal();renderAgenda();renderUpcoming()}
   if(cur==="ideas")renderIdeas();
   if(cur==="notes")renderNotes();
-  if(cur==="setup"){renderWSettings();renderGh();renderNf()}
+  if(cur==="setup"){renderWSettings();renderGh();renderNf();renderWgPanel()}
 }
 
 /* calendar */
@@ -994,12 +1028,73 @@ function renderWSettings(){
   const li=x=>`<li><i style="background:${color(x.cat)}"></i><span class="mono" style="opacity:.7;font-size:12px">${x.time||"··"}</span>${esc(x.title)}</li>`;
   $("#miniW").innerHTML=`<div class="md">${t.getDate()} ${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}</div><ul>${A.map(li).join("")||"<li>Свободный день</li>"}</ul>${B.length?`<div class="md">Завтра</div><ul>${B.map(li).join("")}</ul>`:""}`;
 }
+function widgetBody(){
+  const {A,B,D=[]}=widgetItems();
+  const li=x=>`<li><i style="background:${color(x.cat)}"></i><span class="tm mono">${x.time||"весь день"}</span><span style="${x.done?"text-decoration:line-through;opacity:.6":""}">${esc(x.title)}</span></li>`;
+  const sd=k=>+k.slice(8)+"."+k.slice(5,7);
+  return `<div class="wg-sec">Сегодня</div><ul class="wg-list">${A.map(li).join("")||`<li><i></i><span></span><span style="color:var(--muted)">Дел нет</span></li>`}</ul>${B.length?`<div class="wg-sec">Завтра</div><ul class="wg-list">${B.map(li).join("")}</ul>`:""}${D.length?`<div class="wg-sec">Сроки сдачи</div><ul class="wg-list">${D.map(x=>`<li><i style="background:var(--danger)"></i><span class="tm mono">${sd(x.due)}</span><span>${esc(x.title)}</span></li>`).join("")}</ul>`:""}`;
+}
 function renderWidget(){
   document.body.classList.add("wmode");$("#main").hidden=true;$("#wview").hidden=false;
   const t=today();$("#wgDay").textContent=t.getDate();$("#wgRest").textContent=`${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}`;
-  const {A,B}=widgetItems();
-  const li=x=>`<li><i style="background:${color(x.cat)}"></i><span class="tm mono">${x.time||"весь день"}</span><span style="${x.done?"text-decoration:line-through;opacity:.6":""}">${esc(x.title)}</span></li>`;
-  $("#wgBody").innerHTML=`<div class="wg-sec">Сегодня</div><ul class="wg-list">${A.map(li).join("")||`<li><i></i><span></span><span style="color:var(--muted)">Дел нет</span></li>`}</ul>${B.length?`<div class="wg-sec">Завтра</div><ul class="wg-list">${B.map(li).join("")}</ul>`:""}`;
+  $("#wgBody").innerHTML=widgetBody();
+  $("#wgPip").hidden=!canPip()||!!pipWin;
+}
+
+
+/* ---------- widget on PC (always-on-top window, Windows shortcut) and iPhone (Scriptable) ---------- */
+const APP_TITLE="Планер Люлика";
+const canPip=()=>{try{return "documentPictureInPicture" in window&&window.top===window}catch(e){return false}};
+let pipWin=null;
+async function openPip(){
+  if(!canPip()){toast("Окно поверх всех окон работает в Chrome и Edge на компьютере, в версии планера на GitHub",4500);return}
+  if(pipWin){try{pipWin.focus()}catch(e){}return}
+  try{pipWin=await documentPictureInPicture.requestWindow({width:340,height:460})}catch(e){pipWin=null;toast("Не получилось открыть окно поверх других",4000);return}
+  const d=pipWin.document;
+  document.querySelectorAll('style,link[rel="stylesheet"]').forEach(n=>d.head.appendChild(n.cloneNode(true)));
+  d.title=APP_TITLE;
+  d.body.innerHTML='<div class="pipw"><div class="wg-date"><span class="big mono" id="pDay"></span><span class="rest" id="pRest"></span></div><div id="pBody"></div></div>';
+  pipWin.addEventListener("pagehide",()=>{pipWin=null;if(location.hash==="#widget")renderWidget()});
+  renderPip();if(location.hash==="#widget")renderWidget();
+}
+function renderPip(){
+  if(!pipWin)return;const d=pipWin.document,t=today(),day=d.getElementById("pDay");if(!day)return;
+  day.textContent=t.getDate();d.getElementById("pRest").textContent=`${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}`;
+  d.getElementById("pBody").innerHTML=widgetBody();
+}
+setInterval(()=>{renderPip();if(location.hash==="#widget")renderWidget()},60000);
+function winCmd(){
+  const url=location.href.split("#")[0]+"#widget";
+  return ["@echo off",
+    "rem Planer widget: opens a small window without the address bar.",
+    "rem To start it with Windows: press Win+R, type shell:startup, move this file there.",
+    'set "U='+url+'"',
+    'set "B=%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe"',
+    'if not exist "%B%" set "B=%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe"',
+    'if not exist "%B%" set "B=%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe"',
+    'if not exist "%B%" set "B=%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe"',
+    'if not exist "%B%" set "B=%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe"',
+    'if not exist "%B%" set "B=msedge"',
+    'start "" "%B%" --app="%U%" --window-size=380,620',""].join("\r\n");
+}
+function cssHex(v){const el=document.createElement("i");el.style.color=v;document.body.appendChild(el);const m=getComputedStyle(el).color.match(/[\d.]+/g)||[0,0,0];el.remove();return "#"+m.slice(0,3).map(x=>Math.round(+x).toString(16).padStart(2,"0")).join("")}
+const SCRIPTABLE_BODY="const pad=n=>String(n).padStart(2,\"0\");\nconst iso=d=>d.getFullYear()+\"-\"+pad(d.getMonth()+1)+\"-\"+pad(d.getDate());\nconst fromIso=s=>{const p=s.split(\"-\").map(Number);return new Date(p[0],p[1]-1,p[2])};\nconst dim=(y,m)=>new Date(y,m+1,0).getDate();\nconst MON=[\"января\",\"февраля\",\"марта\",\"апреля\",\"мая\",\"июня\",\"июля\",\"августа\",\"сентября\",\"октября\",\"ноября\",\"декабря\"];\nconst DOW=[\"воскресенье\",\"понедельник\",\"вторник\",\"среда\",\"четверг\",\"пятница\",\"суббота\"];\nfunction occurs(t,d){\n  const rp=t.repeat;if(!rp||!rp.freq)return t.date===d;\n  if(d<t.date||(rp.until&&d>rp.until)||(t.skipDates||[]).includes(d))return false;\n  const s=fromIso(t.date),x=fromIso(d),dw=x.getDay();\n  if(rp.freq===\"daily\")return true;\n  if(rp.freq===\"weekdays\")return dw>=1&&dw<=5;\n  if(rp.freq===\"weekly\"||rp.freq===\"biweekly\"){\n    const days=rp.days&&rp.days.length?rp.days:[s.getDay()];if(!days.includes(dw))return false;\n    if(rp.freq===\"weekly\")return true;\n    const mon=z=>{const q=new Date(z);q.setDate(q.getDate()-((q.getDay()+6)%7));return q};\n    return Math.round((mon(x)-mon(s))/6048e5)%2===0;\n  }\n  if(rp.freq===\"monthly\")return x.getDate()===Math.min(s.getDate(),dim(x.getFullYear(),x.getMonth()));\n  if(rp.freq===\"yearly\")return x.getMonth()===s.getMonth()&&x.getDate()===Math.min(s.getDate(),dim(x.getFullYear(),x.getMonth()));\n  return false;\n}\n\nconst KEY=\"planer-token:\"+CFG.repo;\nconst fm=FileManager.local();\nconst cachePath=fm.joinPath(fm.documentsDirectory(),\"planer-\"+CFG.repo.replace(/[^\\w-]/g,\"_\")+\".json\");\n\nasync function askToken(){\n  const a=new Alert();\n  a.title=\"Токен GitHub\";\n  a.message=\"Вставьте токен доступа к репозиторию \"+CFG.repo+\" (тот же, что в настройках планера). Он сохранится только на этом телефоне.\";\n  a.addSecureTextField(\"github_pat_…\");\n  a.addAction(\"Сохранить\");\n  a.addCancelAction(\"Отмена\");\n  if(await a.present()===-1)return null;\n  const v=a.textFieldValue(0).trim();\n  if(v)Keychain.set(KEY,v);\n  return v||null;\n}\n\nasync function load(){\n  let token=Keychain.contains(KEY)?Keychain.get(KEY):null;\n  if(!token&&config.runsInApp)token=await askToken();\n  if(!token)return {err:\"Откройте Scriptable и запустите этот скрипт, чтобы ввести токен.\"};\n  try{\n    const r=new Request(\"https://api.github.com/repos/\"+CFG.repo+\"/contents/data.json\");\n    r.headers={Authorization:\"Bearer \"+token,Accept:\"application/vnd.github.raw+json\",\"User-Agent\":\"planer-widget\"};\n    r.timeoutInterval=20;\n    const txt=await r.loadString();\n    const st=r.response&&r.response.statusCode;\n    if(st===401||st===403){if(config.runsInApp)Keychain.remove(KEY);return {err:\"Токен не подходит. Запустите скрипт в Scriptable ещё раз и вставьте новый.\"}}\n    if(st===404)return {err:\"Не нашёл \"+CFG.repo+\". Проверьте, что синхронизация в планере подключена.\"};\n    if(st&&st>=300)throw new Error(\"HTTP \"+st);\n    fm.writeString(cachePath,txt);\n    return {data:JSON.parse(txt)};\n  }catch(e){\n    if(fm.fileExists(cachePath))return {data:JSON.parse(fm.readString(cachePath)),stale:true};\n    return {err:\"Нет связи с GitHub. Виджет обновится сам.\"};\n  }\n}\n\nfunction build(res){\n  const C=CFG.colors;\n  const fam=config.widgetFamily||\"large\";\n  const w=new ListWidget();\n  w.backgroundColor=new Color(C.bg);\n  w.url=CFG.open;\n  w.setPadding(14,14,12,14);\n  w.refreshAfterDate=new Date(Date.now()+15*60000);\n  const now=new Date(),td=iso(now);\n  const plus=n=>iso(new Date(now.getFullYear(),now.getMonth(),now.getDate()+n));\n  const tm=plus(1),lim=plus(7);\n\n  const head=w.addStack();head.centerAlignContent();\n  const dn=head.addText(String(now.getDate()));dn.font=Font.boldSystemFont(fam===\"small\"?24:28);dn.textColor=new Color(C.accent);\n  head.addSpacer(6);\n  const dr=head.addText(MON[now.getMonth()]+(fam===\"small\"?\"\":\", \"+DOW[now.getDay()]));dr.font=Font.mediumSystemFont(12);dr.textColor=new Color(C.muted);dr.lineLimit=1;\n  head.addSpacer();\n  if(fam!==\"small\"){const tt=head.addText(CFG.title);tt.font=Font.semiboldSystemFont(11);tt.textColor=new Color(C.muted);tt.lineLimit=1}\n  w.addSpacer(8);\n\n  if(res.err){const e=w.addText(res.err);e.font=Font.systemFont(13);e.textColor=new Color(C.fg);w.addSpacer();return w}\n\n  const all=(Array.isArray(res.data)?res.data:(res.data&&res.data.items)||[]).filter(t=>t&&!t.deleted&&(!t.kind||t.kind===\"task\")&&t.date);\n  const onDay=d=>all.filter(t=>occurs(t,d)&&!(t.repeat&&t.repeat.freq?(t.doneDates||[]).includes(d):t.done))\n    .sort((a,b)=>(a.time||\"99\").localeCompare(b.time||\"99\"));\n  const A=onDay(td),B=onDay(tm);\n  const D=all.filter(t=>t.due&&!t.done&&!(t.repeat&&t.repeat.freq)&&t.due<=lim).sort((a,b)=>(a.due+(a.dueTime||\"99\")).localeCompare(b.due+(b.dueTime||\"99\")));\n  let left={small:4,medium:4,large:11}[fam]||4;\n\n  const row=(t,label,col)=>{\n    const s=w.addStack();s.centerAlignContent();s.spacing=6;\n    const bar=s.addStack();bar.size=new Size(3,14);bar.cornerRadius=1.5;bar.backgroundColor=new Color(col);\n    if(fam!==\"small\"){const tl=s.addText(label);tl.font=Font.regularMonospacedSystemFont(11);tl.textColor=new Color(C.muted);tl.lineLimit=1}\n    const tx=s.addText(t.title);tx.font=Font.systemFont(fam===\"small\"?12:13);tx.textColor=new Color(C.fg);tx.lineLimit=1;\n    w.addSpacer(4);left--;\n  };\n  const sec=txt=>{const s=w.addText(txt.toUpperCase());s.font=Font.semiboldSystemFont(10);s.textColor=new Color(C.muted);w.addSpacer(3);left--};\n  const catCol=t=>C.cats[t.cat]||C.accent;\n  const dd=t=>Number(t.due.slice(8))+\".\"+t.due.slice(5,7);\n\n  if(!A.length){const e=w.addText(\"Сегодня дел нет\");e.font=Font.systemFont(13);e.textColor=new Color(C.muted);w.addSpacer(4);left--}\n  for(const t of A){if(left<=0)break;row(t,t.time||\"день \",catCol(t))}\n  if(D.length&&left>1){w.addSpacer(2);sec(\"Сроки\");for(const t of D){if(left<=0)break;row(t,dd(t),C.danger)}}\n  if(fam===\"large\"&&B.length&&left>1){w.addSpacer(2);sec(\"Завтра\");for(const t of B){if(left<=0)break;row(t,t.time||\"день \",catCol(t))}}\n  w.addSpacer();\n  if(res.stale){const s=w.addText(\"нет связи, показаны прошлые данные\");s.font=Font.systemFont(9);s.textColor=new Color(C.muted)}\n  return w;\n}\n\nconst res=await load();\nconst widget=build(res);\nif(config.runsInWidget)Script.setWidget(widget);\nelse await widget.presentLarge();\nScript.complete();\n";
+function iosScript(){
+  if(!gh||!gh.repo){toast("Сначала подключите синхронизацию через GitHub ниже: виджет берёт дела оттуда",4500);return null}
+  const cfg={repo:gh.repo,title:APP_TITLE,open:location.href.split("#")[0],
+    colors:{bg:cssHex("var(--bg)"),fg:cssHex("var(--fg)"),muted:cssHex("var(--muted)"),accent:cssHex("var(--accent)"),danger:cssHex("var(--danger)"),cats:Object.fromEntries(CATS.map(k=>[k,cssHex(color(k))]))}};
+  return "// "+APP_TITLE+": виджет для приложения Scriptable на iPhone.\n// Токен GitHub не хранится в этом тексте: при первом запуске скрипт спросит его и сохранит в Связке ключей телефона.\nconst CFG="+JSON.stringify(cfg,null,1)+";\n\n"+SCRIPTABLE_BODY;
+}
+$("#pipBtn").onclick=openPip;$("#wgPip").onclick=openPip;
+$("#winCmd").onclick=async()=>{if(window.claude){toast("Ярлык скачивается в версии планера на GitHub",4000);return}
+  if(await saveFile("planer-lyulika-widget.cmd",winCmd(),"application/octet-stream"))toast("Ярлык скачан. Дважды нажмите на него, чтобы открыть виджет",4500)};
+$("#iosCopy").onclick=async()=>{const sc=iosScript();if(!sc)return;
+  try{await navigator.clipboard.writeText(sc);toast("Скрипт скопирован. Перешлите его себе на iPhone",4000)}
+  catch(e){if(await saveFile("planer-lyulika-widget.js",sc,"text/javascript"))toast("Скопировать не вышло, поэтому скрипт скачан файлом",4000)}};
+$("#iosSave").onclick=async()=>{const sc=iosScript();if(sc&&await saveFile("planer-lyulika-widget.js",sc,"text/javascript"))toast("Скрипт скачан",3000)};
+function renderWgPanel(){
+  const inClaude=!!window.claude;$("#wgOnlyGh").hidden=!inClaude;
+  $$(".wg-act").forEach(r=>r.hidden=inClaude);$("#pipBtn").hidden=!canPip();
 }
 
 /* ---------- voice parsing ---------- */
@@ -1396,7 +1491,6 @@ render();renderGh();initDb();initSample();
 if(ghOn())ghSync();
 })();
 </script>
-
 <script>
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
