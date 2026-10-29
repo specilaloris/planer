@@ -1,0 +1,94 @@
+# Напоминания планера в Telegram — приходят, даже когда планер закрыт.
+# Нужны 3 секрета в Settings → Secrets and variables → Actions:
+#   PLANER_TOKEN        — тот же токен, что вводится в планере (доступ к planer-data)
+#   TELEGRAM_BOT_TOKEN  — токен бота от @BotFather
+#   TELEGRAM_CHAT_ID    — ваш id в Telegram (узнать у @userinfobot)
+# Если хранилище называется не planer-data, создайте переменную DATA_REPO = логин/название.
+# Журнал запусков в публичном репозитории виден всем, поэтому названия дел в него не пишутся.
+
+name: Напоминания в Telegram
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Отправить тестовое сообщение"
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: remind
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      TZ: Europe/Moscow
+      DATA_REPO: ${{ vars.DATA_REPO || format('{0}/planer-data', github.repository_owner) }}
+      DATA_TOKEN: ${{ secrets.PLANER_TOKEN }}
+      TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+    steps:
+      - name: Отправить напоминания
+        shell: bash
+        run: |
+          node --input-type=module <<'EOF'
+          const {DATA_REPO,DATA_TOKEN,TG_TOKEN,TG_CHAT,TEST}=process.env;
+          if(!DATA_TOKEN||!TG_TOKEN||!TG_CHAT){console.log("Не заданы секреты PLANER_TOKEN, TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID");process.exit(1)}
+          const H={Authorization:"Bearer "+DATA_TOKEN,Accept:"application/vnd.github+json","User-Agent":"planer-remind"};
+          const api=p=>`https://api.github.com/repos/${DATA_REPO}/contents/${p}`;
+          async function get(p){
+            const r=await fetch(api(p),{headers:H});
+            if(r.status===404)return {data:null,sha:null};
+            if(!r.ok){console.log(`Хранилище ответило ${r.status}: проверьте PLANER_TOKEN и название репозитория`);process.exit(1)}
+            const j=await r.json();let txt=Buffer.from(j.content||"","base64").toString("utf8");
+            if(!txt&&j.size>0){const r2=await fetch(api(p),{headers:{...H,Accept:"application/vnd.github.raw+json"}});txt=await r2.text()}
+            return {data:txt?JSON.parse(txt):null,sha:j.sha};
+          }
+          async function tg(text){
+            const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:TG_CHAT,text,disable_web_page_preview:true})});
+            if(!r.ok)console.log("Telegram ответил",r.status,"— проверьте токен бота, id и что вы нажали Start у бота");
+            return r.ok;
+          }
+          const CAT={personal:"Личное",work:"КАДИС",anc:"Найдём предков"};
+          const MON=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+          const pad=n=>String(n).padStart(2,"0");
+          const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+
+          if(TEST==="true"){await tg("Планер: напоминания в Telegram подключены.");}
+
+          const {data}=await get("data.json");
+          const items=Array.isArray(data)?data:((data&&data.items)||[]);
+          const state=await get("notified.json");const sent=state.data||{};
+          const now=Date.now(),today=iso(new Date());
+          const due=[];
+          for(const t of items){
+            if(!t||t.deleted||t.done||(t.kind&&t.kind!=="task")||!t.date)continue;
+            const rem=typeof t.remind==="number"?t.remind:(t.time?15:-1);if(rem<0)continue;
+            const [y,m,d]=t.date.split("-").map(Number),[h,mi]=(t.time||"09:00").split(":").map(Number);
+            const at=new Date(y,m-1,d,h,mi).getTime()-rem*60000,key=t.id+"@"+at;
+            if(at<=now&&at>now-6*3600e3&&!sent[key])due.push({t,at,key});
+          }
+          due.sort((a,b)=>a.at-b.at);
+          let changed=false,ok=0;
+          for(const {t,key} of due){
+            const when=t.date===today?(t.time?"Сегодня в "+t.time:"Сегодня"):(Number(t.date.slice(8))+" "+MON[Number(t.date.slice(5,7))-1]+(t.time?" в "+t.time:""));
+            const text=["⏰ "+t.title,when+" · "+(CAT[t.cat]||"Личное"),t.note||""].filter(Boolean).join("\n");
+            if(await tg(text)){sent[key]=now;changed=true;ok++}
+          }
+          for(const k of Object.keys(sent))if(sent[k]<now-3*864e5){delete sent[k];changed=true}
+          if(changed){
+            const body={message:"Напоминания: отметка отправленных",content:Buffer.from(JSON.stringify(sent)).toString("base64")};
+            if(state.sha)body.sha=state.sha;
+            const r=await fetch(api("notified.json"),{method:"PUT",headers:{...H,"Content-Type":"application/json"},body:JSON.stringify(body)});
+            if(!r.ok)console.log("Не удалось записать отметку отправленных:",r.status);
+          }
+          console.log(`Отправлено напоминаний: ${ok} из ${due.length}`);
+          EOF
