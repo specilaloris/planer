@@ -208,6 +208,12 @@ details.add summary::-webkit-details-marker{display:none}
 .editor h3{font-size:17px;margin:.6em 0 .3em}
 .editor p{margin:.4em 0}
 .editor ul,.editor ol{padding-left:1.4em}
+.editor ul.checklist{list-style:none;padding-left:0}
+.editor ul.checklist li{position:relative;padding-left:30px;margin:.3em 0}
+.editor ul.checklist li::before{content:"";position:absolute;left:2px;top:.22em;width:18px;height:18px;border:1.5px solid var(--muted);border-radius:5px;background:var(--surface);cursor:pointer;box-sizing:border-box}
+.editor ul.checklist li[data-checked="true"]::before{background:var(--ok);border-color:var(--ok)}
+.editor ul.checklist li[data-checked="true"]::after{content:"";position:absolute;left:8.5px;top:calc(.22em + 3px);width:5px;height:10px;border:solid var(--surface);border-width:0 2px 2px 0;transform:rotate(45deg);pointer-events:none}
+.editor ul.checklist li[data-checked="true"]{color:var(--muted);text-decoration:line-through}
 .editor blockquote{margin:.5em 0;padding:.2em 0 .2em 12px;border-left:3px solid var(--line);color:var(--muted)}
 .ed-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 
@@ -234,7 +240,19 @@ body.wmode .bnav{display:none}
 .wg-list .tm{color:var(--muted);font-size:14px}
 .wg-sec{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600;margin-top:4px}
 
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-weight:500;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 24px rgb(0 0 0/.25)}
+.task .t{border:0;background:transparent;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;border-radius:6px}
+.task .t:hover b{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.task.example .t{cursor:default}
+.sheet-bg{position:fixed;inset:0;z-index:30;background:rgb(0 0 0/.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.sheet{background:var(--surface);color:var(--fg);border-radius:18px;width:100%;max-width:460px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgb(0 0 0/.3)}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld input,.fld select,.fld textarea{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px;width:100%;min-width:0;resize:vertical}
+.form2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:560px){
+  .sheet-bg{align-items:flex-end;padding:0}
+  .sheet{border-radius:18px 18px 0 0;max-width:none;padding-block:18px calc(18px + env(safe-area-inset-bottom,0px));padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-weight:500;max-width:calc(100% - 32px);z-index:40;box-shadow:0 6px 24px rgb(0 0 0/.25)}
 @media (max-width:720px){.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
 #sync{cursor:pointer}
 .sync{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
@@ -322,8 +340,9 @@ body.wmode .bnav{display:none}
           <input class="full" id="fTitle" placeholder="Что сделать" required>
           <input type="date" id="fDate" required>
           <input type="time" id="fTime">
-          <select id="fCat"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select>
-          <input id="fNote" placeholder="Заметка (необязательно)">
+          <select id="fCat" aria-label="Категория"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select>
+          <select id="fRem" aria-label="Напомнить"></select>
+          <input class="full" id="fNote" placeholder="Заметка (необязательно)">
           <button class="btn primary full" type="submit">Добавить</button>
         </form>
       </details>
@@ -380,6 +399,7 @@ body.wmode .bnav{display:none}
           <div class="pop-panel" id="colorPanel" hidden><span class="lbl">Цвет текста</span><div class="sw" id="swText"></div><span class="lbl">Выделение</span><div class="sw" id="swHi"></div></div></div>
         <span class="sep"></span>
         <button class="tb" data-cmd="insertUnorderedList" title="Список"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg></button>
+        <button class="tb" id="tbCheck" title="Чек-лист"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 7l1.2 1.2L8 6"/><rect x="3" y="14" width="6" height="6" rx="1.5"/><path d="M12 7h9M12 17h9"/></svg></button>
         <button class="tb" data-cmd="insertOrderedList" title="Нумерованный список"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 6h10M10 12h10M10 18h10"/><text x="2" y="8" font-size="7" fill="currentColor" stroke="none">1</text><text x="2" y="14" font-size="7" fill="currentColor" stroke="none">2</text><text x="2" y="20" font-size="7" fill="currentColor" stroke="none">3</text></svg></button>
         <button class="tb" id="tbLink" title="Ссылка"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></button>
         <span class="sep"></span>
@@ -430,6 +450,22 @@ body.wmode .bnav{display:none}
     </div>
   </div>
 
+  <div class="panel" id="nfPanel">
+    <div class="ag-head"><h2 style="font-size:18px">Напоминания</h2><span class="sync" id="nfStatus"><i></i><span></span></span></div>
+    <div class="wset">
+      <div class="field">
+        <span class="lbl">Для новых дел со временем</span>
+        <select id="defRem" class="btn" aria-label="Напоминание по умолчанию"></select>
+        <span class="hint">У каждого дела можно поменять: нажмите на него в календаре. Для дел без времени напоминание считается от 9:00.</span>
+      </div>
+      <div class="field">
+        <span class="lbl">Уведомления на этом устройстве</span>
+        <div class="row"><button class="btn primary" id="nfOn">Включить уведомления</button><button class="btn" id="nfTest">Проверить</button></div>
+        <span class="hint" id="nfHint"></span>
+      </div>
+    </div>
+  </div>
+
   <div class="panel" id="ghPanel" hidden>
     <div class="ag-head"><h2 style="font-size:18px">Синхронизация через GitHub</h2><span class="sync" id="ghStatus"><i></i><span>не подключено</span></span></div>
     <p class="hint" style="margin:0">Дела, идеи и заметки хранятся в вашем приватном репозитории на GitHub и одинаковы на всех устройствах. Подключите на каждом устройстве один раз.</p>
@@ -467,6 +503,26 @@ body.wmode .bnav{display:none}
   <a href="#notes" data-tab="notes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg>Заметки</a>
   <a href="#setup" data-tab="setup"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Настройки</a>
 </nav>
+<div class="sheet-bg" id="editBg" hidden>
+  <form class="sheet" id="editForm" role="dialog" aria-modal="true" aria-labelledby="editT" autocomplete="off">
+    <div class="ag-head" style="align-items:center"><h2 id="editT" style="font-size:18px">Изменить дело</h2><button type="button" class="del" id="editX" aria-label="Закрыть"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <label class="fld"><span class="lbl">Что сделать</span><input id="eTitle" required></label>
+    <div class="form2">
+      <label class="fld"><span class="lbl">Дата</span><input type="date" id="eDate" required></label>
+      <label class="fld"><span class="lbl">Время</span><input type="time" id="eTime"></label>
+    </div>
+    <div class="form2">
+      <label class="fld"><span class="lbl">Категория</span><select id="eCat"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select></label>
+      <label class="fld"><span class="lbl">Напомнить</span><select id="eRem"></select></label>
+    </div>
+    <label class="fld"><span class="lbl">Заметка</span><textarea id="eNote" rows="2"></textarea></label>
+    <label class="row" style="font-size:14px"><input type="checkbox" id="eDone"> Выполнено</label>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="btn ghost danger" id="eDel">Удалить</button>
+      <div class="row"><button type="button" class="btn ghost" id="eCancel">Отмена</button><button class="btn primary" type="submit">Сохранить</button></div>
+    </div>
+  </form>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -505,6 +561,13 @@ const defaultCompany=()=>filter==="anc"?"anc":"work";
 const ofKind=k=>items.filter(x=>!x.deleted&&kindOf(x)===k);
 const ts=x=>x.updated||x.created||0;
 const byFilter=(list,c=filter)=>list.filter(t=>c==="all"||t.cat===c);
+const REM=[[-1,"Не напоминать"],[0,"В момент события"],[5,"За 5 минут"],[15,"За 15 минут"],[30,"За 30 минут"],[60,"За 1 час"],[120,"За 2 часа"],[1440,"За день"]];
+const remOptions=v=>REM.map(([k,l])=>`<option value="${k}"${k===v?" selected":""}>${l}</option>`).join("");
+let defRem=ls.get("pl.defRem",15);
+const newRem=time=>time?defRem:-1;
+const effRem=t=>typeof t.remind==="number"?t.remind:(t.time?15:-1);
+function remAt(t){const r=effRem(t);if(r<0||!t.date)return null;const[y,m,d]=t.date.split("-").map(Number);const[h,mi]=(t.time||"09:00").split(":").map(Number);return new Date(y,m-1,d,h,mi).getTime()-r*60000}
+function remShort(t){const at=remAt(t);if(at==null)return "";const a=new Date(at);return pad(a.getHours())+":"+pad(a.getMinutes())+(iso(a)!==t.date?" накануне":"")}
 const sortT=(a,b)=>(a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99"));
 
 function exTasks(){
@@ -668,7 +731,7 @@ function render(){
   if(cur==="cal"){renderCal();renderAgenda();renderUpcoming()}
   if(cur==="ideas")renderIdeas();
   if(cur==="notes")renderNotes();
-  if(cur==="setup"){renderWSettings();renderGh()}
+  if(cur==="setup"){renderWSettings();renderGh();renderNf()}
 }
 
 /* calendar */
@@ -686,10 +749,11 @@ function renderCal(){
   $("#cal").innerHTML=h;
 }
 function taskLi(t){
+  const meta=[!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
   return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}" data-id="${t.id}">
     <input type="checkbox" class="chk" ${t.done?"checked":""} ${t.ex?"disabled":""} aria-label="Готово">
     <span class="time mono">${t.time||"—"}</span>
-    <span class="t"><b>${esc(t.title)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}${filter==="all"?`<small>${CAT[t.cat]}${t.ex?" · пример":""}</small>`:""}</span>
+    <button type="button" class="t" data-edit ${t.ex?'tabindex="-1"':'title="Изменить"'}><b>${esc(t.title)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}${meta?`<small>${meta}</small>`:""}</button>
     ${t.ex?"<span></span>":`<button class="del" data-del aria-label="Удалить">${X}</button>`}</li>`;
 }
 function renderAgenda(){
@@ -763,13 +827,20 @@ function sanitize(html){
   return t.innerHTML;
 }
 const plain=h=>{const d=document.createElement("div");d.innerHTML=h||"";return d.textContent.replace(/\s+/g," ").trim()};
+function checkStat(h){const all=(String(h||"").match(/data-checked="/g)||[]).length;if(!all)return "";const done=(String(h).match(/data-checked="true"/g)||[]).length;return `☑ ${done}/${all} · `}
+function textToHtml(text){
+  const lines=String(text||"").split(/\n+/).map(l=>l.trim()).filter(Boolean);let out="",list=[];
+  const flush=()=>{if(list.length){out+=`<ul class="checklist">${list.map(x=>`<li data-checked="false">${esc(x)}</li>`).join("")}</ul>`;list=[]}};
+  for(const l of lines){const m=l.match(/^(?:[-–—•*]|\[\s?\]|\d+[.)])\s+(.+)/);if(m)list.push(m[1]);else{flush();out+=`<p>${esc(l)}</p>`}}
+  flush();return out||"<p></p>";
+}
 function renderNotes(){
   const q=$("#nSearch").value.trim().toLowerCase();
   const list=byFilter(notesAll()).filter(n=>!q||(n.title+" "+plain(n.html)).toLowerCase().includes(q)).sort((a,b)=>(b.updated||0)-(a.updated||0));
   if(!openNote||!notesAll().some(n=>n.id===openNote))openNote=(list[0]||notesAll()[0]||{}).id||null;
   $("#nItems").innerHTML=list.length?list.map(n=>`<li><button class="nitem${n.ex?" example":""}" data-id="${n.id}" aria-current="${n.id===openNote}">
       <b><i style="background:${color(n.cat)}"></i>${esc(n.title||"Без названия")}</b>
-      <span>${n.ex?"пример · ":""}${esc(plain(n.html).slice(0,90))||"Пусто"}</span></button></li>`).join(""):`<li class="empty">${q?"Ничего не найдено":"Заметок нет"}</li>`;
+      <span>${n.ex?"пример · ":""}${checkStat(n.html)}${esc(plain(n.html).slice(0,90))||"Пусто"}</span></button></li>`).join(""):`<li class="empty">${q?"Ничего не найдено":"Заметок нет"}</li>`;
   const n=notesAll().find(x=>x.id===openNote);
   const ed=$("#editor");
   if(!n){$("#nTitle").value="";ed.innerHTML="";return}
@@ -815,6 +886,25 @@ function exec(cmd,val){restore();try{document.execCommand("styleWithCSS",false,[
   scheduleNoteSave();updateStates()}
 $("#toolbar").addEventListener("mousedown",e=>{if(e.target.closest(".tb"))e.preventDefault()});
 $("#toolbar").addEventListener("click",e=>{const b=e.target.closest("[data-cmd]");if(b)exec(b.dataset.cmd)});
+function caretEl(){const s=getSelection();if(!s.rangeCount)return null;let n=s.anchorNode;n=n&&(n.nodeType===3?n.parentElement:n);return n&&$("#editor").contains(n)?n:null}
+$("#tbCheck").onclick=()=>{
+  restore();let el=caretEl(),l=el&&el.closest("ul,ol");
+  if(l&&l.classList.contains("checklist")){l.classList.remove("checklist");l.querySelectorAll("li").forEach(li=>li.removeAttribute("data-checked"))}
+  else{
+    if(!l||l.tagName!=="UL"){document.execCommand("insertUnorderedList");el=caretEl();l=el&&el.closest("ul")}
+    if(l){l.classList.add("checklist");l.querySelectorAll(":scope > li").forEach(li=>{if(!li.dataset.checked)li.dataset.checked="false"})}
+  }
+  scheduleNoteSave();
+};
+$("#editor").addEventListener("click",e=>{
+  const li=e.target.closest("ul.checklist > li");if(!li)return;
+  const x=e.clientX-li.getBoundingClientRect().left;if(x>28)return;
+  e.preventDefault();li.dataset.checked=li.dataset.checked==="true"?"false":"true";scheduleNoteSave();
+});
+$("#editor").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"||e.shiftKey)return;const el=caretEl();if(!el||!el.closest("ul.checklist"))return;
+  setTimeout(()=>{const li=caretEl()&&caretEl().closest("ul.checklist > li");if(li&&!li.textContent.trim())li.dataset.checked="false"},0);
+});
 $("#tbFont").onchange=e=>exec("fontName",e.target.value);
 $("#tbSize").onchange=e=>exec("fontSize",e.target.value);
 $("#tbBlock").onchange=e=>exec("formatBlock","<"+e.target.value+">");
@@ -879,10 +969,20 @@ const WORK_RE=R(String.raw`кадис|работ|офис|созвон|мити�
 const ANC_RE=R(String.raw`найд[её]м\s+предк|найти\s+предк|\bпредк`);
 const IDEA_RE=R(String.raw`\bиде[яюи]\b|\bпридумать\b|а что если|можно было бы|\bхорошо бы\b`);
 const NOTE_RE=R(String.raw`\bзаметк|\bзапиш|\bзаписать\b|\bзапомни|\bинфа\b|\bлогин\b|\bпароль\b`);
+const CHECK_RE=R(String.raw`чек-?\s?лист|\bсписок\b|\bсписком\b`);
+function toChecklist(r){
+  const src=r.text||r.title,i=src.indexOf(":");
+  let head=i>0?src.slice(0,i):"",rest=i>0?src.slice(i+1):src;
+  head=head.replace(CHECK_RE,"").replace(/\s+/g," ").replace(/^[\s,–—-]*(?:по|про|для|на)?\s*/i,"").trim();
+  const items=rest.split(/\s*(?:,|;|\sи\s)\s*/).map(x=>x.trim()).filter(x=>x.length>1);
+  if(items.length<2)return;
+  r.text=items.map(x=>"- "+x[0].toUpperCase()+x.slice(1)).join("\n");
+  if(!r.noteId)r.title=head?head[0].toUpperCase()+head.slice(1):"Чек-лист";
+}
 function localParse(text,hint){
   const parts=text.replace(/\s+/g," ").split(R(String.raw`[.;!\n]+|,\s*(?=(?:а\s+)?(?:потом|затем|ещё|еще|также)\b)|\s+(?:а потом|потом|затем|и ещё|и еще)\s+|(?=\b(?:ещё |еще |новая )?(?:идея|заметк)\b)`)).map(s=>s.trim()).filter(s=>s.length>2);
   const out=[];
-  for(const p of parts){for(const s of p.split(R(String.raw`,\s*(?=(?:в|во|на|завтра|послезавтра|сегодня|до)\s)`))){const r=parseOne(s,hint);if(r)out.push(r)}}
+  for(const p of parts){for(const s of p.split(R(String.raw`,\s*(?=(?:в|во|на|завтра|послезавтра|сегодня|до)\s)`))){const r=parseOne(s,hint);if(r){if(r.kind==="note"&&CHECK_RE.test(s))toChecklist(r);out.push(r)}}}
   return out;
 }
 function parseOne(s,hint){
@@ -956,7 +1056,7 @@ async function aiParse(text,hint){
   "anc" — компания «Найдём предков»;
   "personal" — личные дела, не связанные с работой.
   Пользователь работает техническим специалистом в обеих компаниях, задачи там похожие (IT, серверы, ПК, сеть, клиенты, созвоны, отчёты), поэтому компанию определяй по упоминанию («КАДИС», «Найдём предков», «по предкам») — в том числе для следующих записей, пока не названа другая компания. Если это рабочая задача, а компания не названа, ставь "${defaultCompany()}".
-- text: подробности для idea и note (полный текст заметки, можно с переносами строк), для task — важная деталь или ""
+- text: подробности для idea и note (полный текст заметки, можно с переносами строк), для task — важная деталь или "". Если в заметке перечисление пунктов (чек-лист, список, что купить, что взять с собой), запиши каждый пункт с новой строки, начиная с «- »
 - noteId: если запись нужно дописать в существующую заметку, укажи её id из списка, иначе ""
 Существующие заметки: ${JSON.stringify(notes)}
 Исправь очевидные ошибки распознавания речи. Не теряй ни одной записи. Верни только JSON вида {"items":[...]}.
@@ -1008,10 +1108,10 @@ $("#addAll").onclick=async()=>{
   const cnt={task:0,idea:0,note:0};let lastNote=null,firstTask=null;
   for(const p of pending){
     cnt[p.kind]++;
-    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",done:false,created:Date.now()},{silent:true});firstTask=firstTask||p}
+    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",remind:newRem(p.time),done:false,created:Date.now()},{silent:true});firstTask=firstTask||p}
     if(p.kind==="idea")save({id:p.id,kind:"idea",title:p.title,text:p.text||"",cat:p.cat,created:Date.now()},{silent:true});
     if(p.kind==="note"){
-      const body=(p.text||p.title).split(/\n+/).map(l=>`<p>${esc(l)}</p>`).join("");
+      const body=textToHtml(p.text||p.title);
       const ex=p.noteId&&items.find(x=>x.id===p.noteId);
       if(ex){save({...ex,html:(ex.html||"")+body,updated:Date.now()},{silent:true});lastNote=ex.id}
       else{save({id:p.id,kind:"note",title:p.title,cat:p.cat,html:body,updated:Date.now()},{silent:true});lastNote=p.id}
@@ -1039,8 +1139,14 @@ $("#todayBtn").onclick=()=>{const t=today();sel=iso(t);view=new Date(t.getFullYe
 document.addEventListener("change",e=>{if(e.target.classList.contains("chk")){const li=e.target.closest(".task");const t=items.find(x=>x.id===li.dataset.id);if(t)save({...t,done:e.target.checked})}});
 document.addEventListener("click",e=>{const d=e.target.closest(".task [data-del]");if(d){remove(d.closest(".task").dataset.id);toast("Удалено")}});
 $("#addForm").onsubmit=e=>{e.preventDefault();
-  const t={id:uid(),title:$("#fTitle").value.trim(),date:$("#fDate").value,time:$("#fTime").value,cat:$("#fCat").value,note:$("#fNote").value.trim(),done:false,created:Date.now()};
-  if(!t.title)return;sel=t.date;save(t);$("#fTitle").value="";$("#fNote").value="";$("#fTime").value="";toast("Добавлено")};
+  const t={id:uid(),title:$("#fTitle").value.trim(),date:$("#fDate").value,time:$("#fTime").value,cat:$("#fCat").value,note:$("#fNote").value.trim(),remind:+$("#fRem").value,done:false,created:Date.now()};
+  if(!t.title)return;if(!t.time&&$("#fRem").dataset.auto==="1")t.remind=-1;
+  sel=t.date;save(t);$("#fTitle").value="";$("#fNote").value="";$("#fTime").value="";syncFRem();toast("Добавлено")};
+function syncFRem(){const f=$("#fRem");const v=newRem($("#fTime").value);f.innerHTML=remOptions(v);f.dataset.auto="1"}
+$("#fTime").addEventListener("change",()=>{if($("#fRem").dataset.auto==="1")syncFRem()});
+$("#fRem").addEventListener("change",()=>{$("#fRem").dataset.auto="0"});
+syncFRem();
+
 $("#wCat").onclick=e=>{const b=e.target.closest("button");if(!b)return;wcfg.cat=b.dataset.c;ls.set("pl.widget",wcfg);renderWSettings()};
 $("#wCount").onclick=e=>{const b=e.target.closest("button");if(!b)return;wcfg.n=+b.dataset.n;ls.set("pl.widget",wcfg);renderWSettings()};
 $("#wTomorrow").onchange=e=>{wcfg.tomorrow=e.target.checked;ls.set("pl.widget",wcfg);renderWSettings()};
@@ -1059,7 +1165,9 @@ $("#exportIcs").onclick=async()=>{
     if(t.time){const[h,mi]=t.time.split(":").map(Number);const end=new Date(2000,0,1,h,mi+30);out.push("DTSTART:"+d+"T"+t.time.replace(":","")+"00","DTEND:"+d+"T"+pad(end.getHours())+pad(end.getMinutes())+"00")}
     else out.push("DTSTART;VALUE=DATE:"+d,"DTEND;VALUE=DATE:"+iso(addDays(fromIso(t.date),1)).replace(/-/g,""));
     out.push("SUMMARY:"+ics(t.title),"CATEGORIES:"+CAT[t.cat]);if(t.note)out.push("DESCRIPTION:"+ics(t.note));
-    out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+ics(t.title),"TRIGGER:"+(t.time?"-PT15M":"PT9H"),"END:VALARM","END:VEVENT");
+    const rm=effRem(t);
+    if(rm>=0){const off=t.time?-rm:540-rm;out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+ics(t.title),"TRIGGER:"+(off<0?"-":"")+"PT"+Math.abs(off)+"M","END:VALARM")}
+    out.push("END:VEVENT");
   }
   out.push("END:VCALENDAR");
   if(await saveFile(`planer-${filter==="all"?"vse":filter}.ics`,out.join("\r\n"),"text/calendar"))toast("Файл готов: откройте его на телефоне, чтобы добавить дела в календарь",4000);
@@ -1069,8 +1177,75 @@ $("#exportIcs").onclick=async()=>{
 const fired=new Set();let audio=null;
 document.addEventListener("pointerdown",()=>{if(!audio){try{audio=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}},{once:true});
 function beep(){if(!audio)return;try{const o=audio.createOscillator(),g=audio.createGain();o.frequency.value=880;g.gain.value=.08;o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+.25)}catch(e){}}
-setInterval(()=>{const n=new Date(),k=iso(n),hm=pad(n.getHours())+":"+pad(n.getMinutes());
-  ofKind("task").forEach(t=>{if(!t.done&&t.date===k&&t.time===hm&&!fired.has(t.id)){fired.add(t.id);toast(`Пора: ${t.title}`,8000);beep()}})},15000);
+let firedMap=ls.get("pl.fired",null);const firstRun=firedMap===null;if(!firedMap)firedMap={};
+const canSys=()=>!window.claude&&"Notification" in window;
+async function showSys(title,body,tag){
+  if(!canSys()||Notification.permission!=="granted")return false;
+  const opt={body,tag,renotify:true,requireInteraction:true,icon:"icon-192.png",badge:"icon-192.png",data:{url:location.href.split("#")[0]}};
+  try{const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(reg){await reg.showNotification(title,opt);return true}}catch(e){}
+  try{new Notification(title,opt);return true}catch(e){return false}
+}
+function notifyTask(t){
+  const r=effRem(t),td=iso(today());
+  const when=t.time?(r===0?"Сейчас":r>=1440?"Завтра в "+t.time:"В "+t.time+(t.date===td?"":", "+fmtDate(fromIso(t.date)))):(t.date===td?"Сегодня":"Завтра");
+  const body=[when,CAT[t.cat],t.note].filter(Boolean).join(" · ");
+  toast(`Напоминание: ${t.title}`,9000);beep();showSys(t.title,body,t.id);
+}
+function checkReminders(silent){
+  const now=Date.now();let ch=false;
+  for(const k in firedMap)if(firedMap[k]<now-3*864e5){delete firedMap[k];ch=true}
+  for(const t of ofKind("task")){
+    if(t.done)continue;const at=remAt(t);if(at==null||at>now||at<now-6*3600e3)continue;
+    const key=t.id+"@"+at;if(firedMap[key])continue;firedMap[key]=now;ch=true;if(!silent)notifyTask(t);
+  }
+  if(ch||silent)ls.set("pl.fired",firedMap);
+}
+setTimeout(()=>checkReminders(firstRun),2500);
+setInterval(()=>checkReminders(false),20000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkReminders(false)});
+
+/* notifications settings */
+function renderNf(){
+  $("#defRem").innerHTML=remOptions(defRem);
+  const st=$("#nfStatus"),hint=$("#nfHint");let on=false,txt="",h="";
+  if(window.claude){txt="внутри страницы";h="В этой версии напоминание показывается на странице со звуком, пока она открыта. Системные уведомления и Telegram работают в версии на GitHub.";$("#nfOn").hidden=true}
+  else if(!("Notification" in window)){txt="не поддерживаются";h="Этот браузер не умеет показывать уведомления. На iPhone добавьте планер на экран Домой и откройте оттуда.";$("#nfOn").hidden=true}
+  else if(Notification.permission==="granted"){on=true;txt="включены";h="Приходят, пока планер открыт, даже свёрнутым. Чтобы напоминания приходили на телефон при закрытом планере, подключите Telegram.";$("#nfOn").hidden=true}
+  else if(Notification.permission==="denied"){txt="запрещены";h="Уведомления для этого сайта запрещены в браузере. Нажмите на значок слева от адреса → Разрешения → Уведомления → Разрешить, затем обновите страницу.";$("#nfOn").hidden=true}
+  else{txt="выключены";h="Нажмите «Включить уведомления» и разрешите их в окне браузера.";$("#nfOn").hidden=false}
+  st.classList.toggle("on",on);st.lastElementChild.textContent=txt;hint.textContent=h;
+}
+$("#defRem").onchange=e=>{defRem=+e.target.value;ls.set("pl.defRem",defRem);if($("#fRem").dataset.auto==="1")syncFRem();toast("Сохранено")};
+$("#nfOn").onclick=async()=>{try{await Notification.requestPermission()}catch(e){}renderNf();if(Notification.permission==="granted")showSys("Планер","Уведомления включены","test")};
+$("#nfTest").onclick=async()=>{
+  if(canSys()&&Notification.permission==="default"){try{await Notification.requestPermission()}catch(e){}renderNf()}
+  beep();const ok=await showSys("Планер","Так будет выглядеть напоминание","test");
+  toast(ok?"Тестовое уведомление отправлено":"Так будет выглядеть напоминание на странице",4000);
+};
+
+/* ---------- task editor ---------- */
+let editId=null,eDelArm=0,lastFocus=null;
+function openEdit(id){
+  const t=items.find(x=>x.id===id&&!x.deleted);
+  if(!t){toast("Это пример. Добавьте своё дело, и его можно будет изменить",3500);return}
+  editId=id;lastFocus=document.activeElement;
+  $("#eTitle").value=t.title;$("#eDate").value=t.date;$("#eTime").value=t.time||"";$("#eCat").value=t.cat;
+  $("#eRem").innerHTML=remOptions(effRem(t));$("#eNote").value=t.note||"";$("#eDone").checked=!!t.done;
+  eDelArm=0;$("#eDel").textContent="Удалить";$("#editBg").hidden=false;setTimeout(()=>$("#eTitle").focus(),30);
+}
+function closeEdit(){$("#editBg").hidden=true;editId=null;if(lastFocus&&lastFocus.focus)try{lastFocus.focus()}catch(e){}}
+$("#editForm").onsubmit=e=>{e.preventDefault();
+  const t=items.find(x=>x.id===editId);if(!t){closeEdit();return}
+  const title=$("#eTitle").value.trim();if(!title){$("#eTitle").focus();return}
+  const upd={...t,title,date:$("#eDate").value||t.date,time:$("#eTime").value,cat:$("#eCat").value,remind:+$("#eRem").value,note:$("#eNote").value.trim(),done:$("#eDone").checked};
+  closeEdit();sel=upd.date;const d=fromIso(sel);view=new Date(d.getFullYear(),d.getMonth(),1);save(upd);toast("Сохранено")};
+$("#eTime").addEventListener("change",()=>{if($("#eTime").value&&$("#eRem").value==="-1")$("#eRem").value=String(defRem<0?15:defRem)});
+$("#eDel").onclick=()=>{if(Date.now()-eDelArm>3000){eDelArm=Date.now();$("#eDel").textContent="Точно удалить?";setTimeout(()=>{if($("#eDel"))$("#eDel").textContent="Удалить"},3000);return}
+  const id=editId;closeEdit();remove(id);toast("Удалено")};
+$("#eCancel").onclick=closeEdit;$("#editX").onclick=closeEdit;
+$("#editBg").addEventListener("click",e=>{if(e.target===$("#editBg"))closeEdit()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#editBg").hidden)closeEdit()});
+document.addEventListener("click",e=>{const b=e.target.closest(".task [data-edit]");if(b)openEdit(b.closest(".task").dataset.id)});
 
 let tt;function toast(m,ms=2600){const el=$("#toast");el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,ms)}
 
