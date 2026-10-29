@@ -272,6 +272,8 @@ body.wmode .bnav{display:none}
   .task{grid-template-columns:auto 44px 1fr auto;gap:8px}
   .form{grid-template-columns:1fr}
 }
+a.btn{color:var(--fg)}
+#wgSync{cursor:pointer}
 .pipw{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .pipw .wg-date .big{font-size:38px}
 .pipw .wg-list{gap:6px}
@@ -530,7 +532,8 @@ body.wmode .bnav{display:none}
   <div class="widget">
     <div class="wg-date"><span class="big mono" id="wgDay"></span><span class="rest" id="wgRest"></span></div>
     <div id="wgBody"></div>
-    <div class="row"><a href="#" class="btn">Открыть планер</a><button class="btn" id="wgPip" hidden>Поверх всех окон</button></div>
+    <div class="row"><a href="#" class="btn">Открыть планер</a><button class="btn" id="wgPip" hidden>Поверх всех окон</button><a class="btn" href="#setup" id="wgConnect" hidden>Подключить GitHub</a></div>
+    <span class="sync" id="wgSync" title="Нажмите, чтобы синхронизировать сейчас"><i></i><span>только на этом устройстве</span></span>
   </div>
 </div>
 </div>
@@ -684,7 +687,7 @@ async function initDb(){
 }
 const SYNC_TXT={local:"только на этом устройстве",db:"синхронизировано между устройствами",gh:"синхронизировано через GitHub",busy:"синхронизирую…"};
 function setSync(st,msg){
-  for(const el of [$("#sync"),$("#ghStatus")]){if(!el)continue;
+  for(const el of [$("#sync"),$("#ghStatus"),$("#wgSync")]){if(!el)continue;
     el.classList.toggle("on",st==="db"||st==="gh");el.classList.toggle("err",st==="err");
     el.lastElementChild.textContent=st==="err"?(msg||"ошибка синхронизации"):(el.id==="ghStatus"&&st==="local"?"не подключено":SYNC_TXT[st])}
 }
@@ -1032,13 +1035,14 @@ function widgetBody(){
   const {A,B,D=[]}=widgetItems();
   const li=x=>`<li><i style="background:${color(x.cat)}"></i><span class="tm mono">${x.time||"весь день"}</span><span style="${x.done?"text-decoration:line-through;opacity:.6":""}">${esc(x.title)}</span></li>`;
   const sd=k=>+k.slice(8)+"."+k.slice(5,7);
-  return `<div class="wg-sec">Сегодня</div><ul class="wg-list">${A.map(li).join("")||`<li><i></i><span></span><span style="color:var(--muted)">Дел нет</span></li>`}</ul>${B.length?`<div class="wg-sec">Завтра</div><ul class="wg-list">${B.map(li).join("")}</ul>`:""}${D.length?`<div class="wg-sec">Сроки сдачи</div><ul class="wg-list">${D.map(x=>`<li><i style="background:var(--danger)"></i><span class="tm mono">${sd(x.due)}</span><span>${esc(x.title)}</span></li>`).join("")}</ul>`:""}`;
+  return `<div class="wg-sec">Сегодня</div><ul class="wg-list">${A.map(li).join("")||`<li><i></i><span></span><span style="color:var(--muted)">Дел нет</span></li>`}</ul>${B.length?`<div class="wg-sec">Завтра</div><ul class="wg-list">${B.map(li).join("")}</ul>`:""}${D.length?`<div class="wg-sec">Сроки сдачи</div><ul class="wg-list">${D.map(x=>`<li><i style="background:var(--danger)"></i><span class="tm mono">${sd(x.due)}</span><span>${esc(x.title)}</span></li>`).join("")}</ul>`:""}${ofKind("task").length?"":`<div class="ex-note">Это примеры: на этой странице пока нет ваших дел. Откройте планер → Настройки → «Синхронизация через GitHub» или «Перенос данных».</div>`}`;
 }
 function renderWidget(){
   document.body.classList.add("wmode");$("#main").hidden=true;$("#wview").hidden=false;
   const t=today();$("#wgDay").textContent=t.getDate();$("#wgRest").textContent=`${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}`;
   $("#wgBody").innerHTML=widgetBody();
   $("#wgPip").hidden=!canPip()||!!pipWin;
+  const off=!window.claude&&!ghOn()&&!col;$("#wgConnect").hidden=!off;$("#wgSync").hidden=!!window.claude&&!col;
 }
 
 
@@ -1085,6 +1089,7 @@ function iosScript(){
     colors:{bg:cssHex("var(--bg)"),fg:cssHex("var(--fg)"),muted:cssHex("var(--muted)"),accent:cssHex("var(--accent)"),danger:cssHex("var(--danger)"),cats:Object.fromEntries(CATS.map(k=>[k,cssHex(color(k))]))}};
   return "// "+APP_TITLE+": виджет для приложения Scriptable на iPhone.\n// Токен GitHub не хранится в этом тексте: при первом запуске скрипт спросит его и сохранит в Связке ключей телефона.\nconst CFG="+JSON.stringify(cfg,null,1)+";\n\n"+SCRIPTABLE_BODY;
 }
+$("#wgSync").onclick=()=>{if(ghOn())ghSync();else if(!window.claude)location.hash="#setup"};
 $("#pipBtn").onclick=openPip;$("#wgPip").onclick=openPip;
 $("#winCmd").onclick=async()=>{if(window.claude){toast("Ярлык скачивается в версии планера на GitHub",4000);return}
   if(await saveFile("planer-lyulika-widget.cmd",winCmd(),"application/octet-stream"))toast("Ярлык скачан. Дважды нажмите на него, чтобы открыть виджет",4500)};
