@@ -245,6 +245,10 @@ body.wmode .bnav{display:none}
 .task.example .t{cursor:default}
 .sheet-bg{position:fixed;inset:0;z-index:30;background:rgb(0 0 0/.45);display:flex;align-items:center;justify-content:center;padding:16px}
 .sheet{background:var(--surface);color:var(--fg);border-radius:18px;width:100%;max-width:460px;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto;box-shadow:0 12px 40px rgb(0 0 0/.3)}
+.days{display:flex;gap:4px;flex-wrap:wrap}
+.days button{border:1px solid var(--line);background:var(--bg);border-radius:8px;min-width:38px;height:34px;font-size:13px;font-weight:600;color:var(--muted)}
+.days button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.delchoice{display:flex;gap:6px;flex-wrap:wrap;padding:10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:14px;align-items:center}
 .fld{display:flex;flex-direction:column;gap:4px;min-width:0}
 .fld input,.fld select,.fld textarea{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px;width:100%;min-width:0;resize:vertical}
 .form2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -342,6 +346,7 @@ body.wmode .bnav{display:none}
           <input type="time" id="fTime">
           <select id="fCat" aria-label="Категория"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select>
           <select id="fRem" aria-label="Напомнить"></select>
+          <select class="full" id="fRep" aria-label="Повтор"></select>
           <input class="full" id="fNote" placeholder="Заметка (необязательно)">
           <button class="btn primary full" type="submit">Добавить</button>
         </form>
@@ -508,15 +513,19 @@ body.wmode .bnav{display:none}
     <div class="ag-head" style="align-items:center"><h2 id="editT" style="font-size:18px">Изменить дело</h2><button type="button" class="del" id="editX" aria-label="Закрыть"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <label class="fld"><span class="lbl">Что сделать</span><input id="eTitle" required></label>
     <div class="form2">
-      <label class="fld"><span class="lbl">Дата</span><input type="date" id="eDate" required></label>
+      <label class="fld"><span class="lbl" id="eDateL">Дата</span><input type="date" id="eDate" required></label>
       <label class="fld"><span class="lbl">Время</span><input type="time" id="eTime"></label>
     </div>
     <div class="form2">
       <label class="fld"><span class="lbl">Категория</span><select id="eCat"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select></label>
       <label class="fld"><span class="lbl">Напомнить</span><select id="eRem"></select></label>
     </div>
+    <label class="fld"><span class="lbl">Повтор</span><select id="eRep"></select></label>
+    <div class="fld" id="eDaysW" hidden><span class="lbl">Дни недели</span><div class="days" id="eDays"></div></div>
+    <label class="fld" id="eUntilW" hidden><span class="lbl">Повторять до (необязательно)</span><input type="date" id="eUntil"></label>
     <label class="fld"><span class="lbl">Заметка</span><textarea id="eNote" rows="2"></textarea></label>
-    <label class="row" style="font-size:14px"><input type="checkbox" id="eDone"> Выполнено</label>
+    <label class="row" style="font-size:14px"><input type="checkbox" id="eDone"> <span id="eDoneL">Выполнено</span></label>
+    <div class="delchoice" id="eDelChoice" hidden><span>Удалить:</span><button type="button" class="btn sm" id="eDelOne"></button><button type="button" class="btn sm danger" id="eDelAll">Все повторения</button><button type="button" class="btn sm ghost" id="eDelNo">Отмена</button></div>
     <div class="row" style="justify-content:space-between">
       <button type="button" class="btn ghost danger" id="eDel">Удалить</button>
       <div class="row"><button type="button" class="btn ghost" id="eCancel">Отмена</button><button class="btn primary" type="submit">Сохранить</button></div>
@@ -568,13 +577,43 @@ const newRem=time=>time?defRem:-1;
 const effRem=t=>typeof t.remind==="number"?t.remind:(t.time?15:-1);
 function remAt(t){const r=effRem(t);if(r<0||!t.date)return null;const[y,m,d]=t.date.split("-").map(Number);const[h,mi]=(t.time||"09:00").split(":").map(Number);return new Date(y,m-1,d,h,mi).getTime()-r*60000}
 function remShort(t){const at=remAt(t);if(at==null)return "";const a=new Date(at);return pad(a.getHours())+":"+pad(a.getMinutes())+(iso(a)!==t.date?" накануне":"")}
+/* repeat: {freq:"daily"|"weekdays"|"weekly"|"biweekly"|"monthly"|"yearly", days?:[0..6], until?:"YYYY-MM-DD"} */
+const FREQ=[["","Не повторять"],["daily","Каждый день"],["weekdays","По будням (пн–пт)"],["weekly","Каждую неделю"],["biweekly","Каждые 2 недели"],["monthly","Каждый месяц"],["yearly","Каждый год"]];
+const DOW_ORDER=[1,2,3,4,5,6,0],DOW_SHORT=["вс","пн","вт","ср","чт","пт","сб"];
+const freqOptions=v=>FREQ.map(([k,l])=>`<option value="${k}"${k===(v||"")?" selected":""}>${l}</option>`).join("");
+const dim=(y,m)=>new Date(y,m+1,0).getDate();
+function occurs(t,d){
+  const rp=t.repeat;if(!rp||!rp.freq)return t.date===d;
+  if(d<t.date||(rp.until&&d>rp.until)||(t.skipDates||[]).includes(d))return false;
+  const s=fromIso(t.date),x=fromIso(d),dw=x.getDay();
+  switch(rp.freq){
+    case "daily":return true;
+    case "weekdays":return dw>=1&&dw<=5;
+    case "weekly":case "biweekly":{
+      const days=rp.days&&rp.days.length?rp.days:[s.getDay()];if(!days.includes(dw))return false;
+      if(rp.freq==="weekly")return true;
+      const mon=z=>{const q=new Date(z);q.setDate(q.getDate()-((q.getDay()+6)%7));return q};
+      return Math.round((mon(x)-mon(s))/6048e5)%2===0;}
+    case "monthly":{const sd=s.getDate(),last=dim(x.getFullYear(),x.getMonth());return x.getDate()===Math.min(sd,last)}
+    case "yearly":{if(x.getMonth()!==s.getMonth())return false;const last=dim(x.getFullYear(),x.getMonth());return x.getDate()===Math.min(s.getDate(),last)}
+  }
+  return false;
+}
+const inst=(t,d)=>t.repeat&&t.repeat.freq?{...t,date:d,occ:d,start:t.date,done:(t.doneDates||[]).includes(d)}:t;
+const onDate=(list,d)=>list.filter(t=>occurs(t,d)).map(t=>inst(t,d));
+function repLabel(t){
+  const rp=t.repeat;if(!rp||!rp.freq)return "";const s=fromIso(t.date);
+  const ds=()=>(rp.days&&rp.days.length?rp.days:[s.getDay()]).slice().sort((a,b)=>DOW_ORDER.indexOf(a)-DOW_ORDER.indexOf(b)).map(i=>DOW_SHORT[i]).join(", ");
+  let l={daily:"каждый день",weekdays:"по будням",weekly:"каждую неделю: "+ds(),biweekly:"раз в 2 недели: "+ds(),monthly:"каждый месяц, "+s.getDate()+" числа",yearly:"каждый год, "+s.getDate()+" "+MONTHS[s.getMonth()]}[rp.freq]||"";
+  if(rp.until)l+=", до "+fmtDate(fromIso(rp.until));return l;
+}
 const sortT=(a,b)=>(a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99"));
 
 function exTasks(){
   const t=today(),d0=iso(t),d1=iso(addDays(t,1)),d3=iso(addDays(t,3));
   return [
     {id:"ex1",title:"Созвон с командой по серверу",date:d0,time:"10:00",cat:"work",ex:true},
-    {id:"ex2",title:"Тренировка с гирей",date:d0,time:"19:30",cat:"personal",ex:true},
+    {id:"ex2",title:"Тренировка с гирей",date:d0,time:"19:30",cat:"personal",repeat:{freq:"weekly",days:[1,3,5]},ex:true},
     {id:"ex3",title:"Отправить отчёт клиенту",date:d1,time:"12:00",cat:"work",ex:true},
     {id:"ex4",title:"Забрать посылку",date:d3,time:"",cat:"personal",ex:true},
     {id:"ex5",title:"Настроить VPN для нового сотрудника",date:d1,time:"",cat:"anc",ex:true}];
@@ -710,7 +749,7 @@ function renderGh(){
 const TABS={"":"cal","#ideas":"ideas","#notes":"notes","#setup":"setup"};
 const tab=()=>TABS[location.hash]||"cal";
 const PH={
-  cal:"Например: завтра в 10 созвон с командой по серверу, в пятницу забрать посылку, в четверг по Найдём предков настроить VPN новому сотруднику",
+  cal:"Например: завтра в 10 созвон с командой по серверу, в пятницу забрать посылку, в четверг по Найдём предков настроить VPN новому сотруднику, каждый понедельник в 9 планёрка в КАДИС",
   ideas:"Например: идея — сделать в игре уровень с исчезающими платформами. Ещё идея: шаблон письма клиентам о плановых работах",
   notes:"Например: запиши в заметку по выездам — взять патч-корд и флешку. новая заметка по Найдём предков про роутер в офисе: сменить канал на 6",
 };
@@ -726,7 +765,7 @@ function render(){
   ["cal","ideas","notes","setup"].forEach(k=>$("#tab-"+k).hidden=k!==cur);
   $("#inbox").hidden=cur==="setup";
   $("#voice").placeholder=PH[cur]||"";
-  const open=byFilter(ofKind("task")).filter(x=>!x.done&&x.date>=iso(t)).length;
+  const open=byFilter(ofKind("task")).filter(x=>x.repeat&&x.repeat.freq?!(x.repeat.until&&x.repeat.until<iso(t)):(!x.done&&x.date>=iso(t))).length;
   $("#cntCal").textContent=open||"";$("#cntIdeas").textContent=byFilter(ofKind("idea")).length||"";$("#cntNotes").textContent=byFilter(ofKind("note")).length||"";
   if(cur==="cal"){renderCal();renderAgenda();renderUpcoming()}
   if(cur==="ideas")renderIdeas();
@@ -738,7 +777,8 @@ function render(){
 function renderCal(){
   $("#monthT").textContent=MONTHS_N[view.getMonth()]+" "+view.getFullYear();
   const start=addDays(view,-((view.getDay()+6)%7));
-  const byDate={};byFilter(tasksAll()).forEach(t=>{(byDate[t.date]=byDate[t.date]||new Set()).add(t.cat)});
+  const byDate={},src=byFilter(tasksAll());
+  for(let i=0;i<42;i++){const k=iso(addDays(start,i));for(const t of src)if(occurs(t,k))(byDate[k]=byDate[k]||new Set()).add(t.cat)}
   let h=DOW_S.map(d=>`<div class="dow">${d}</div>`).join("");const td=iso(today());
   for(let i=0;i<42;i++){
     const d=addDays(start,i),k=iso(d);
@@ -749,8 +789,8 @@ function renderCal(){
   $("#cal").innerHTML=h;
 }
 function taskLi(t){
-  const meta=[!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
-  return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}" data-id="${t.id}">
+  const meta=[t.repeat&&t.repeat.freq?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> ${repLabel(t)}`:"",!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
+  return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}" data-id="${t.id}"${t.occ?` data-occ="${t.occ}"`:""}>
     <input type="checkbox" class="chk" ${t.done?"checked":""} ${t.ex?"disabled":""} aria-label="Готово">
     <span class="time mono">${t.time||"—"}</span>
     <button type="button" class="t" data-edit ${t.ex?'tabindex="-1"':'title="Изменить"'}><b>${esc(t.title)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}${meta?`<small>${meta}</small>`:""}</button>
@@ -760,7 +800,7 @@ function renderAgenda(){
   const d=fromIso(sel),td=iso(today());
   const rel=sel===td?"Сегодня, ":sel===iso(addDays(today(),1))?"Завтра, ":"";
   $("#agDate").textContent=`${rel}${d.getDate()} ${MONTHS[d.getMonth()]}`;
-  const list=byFilter(tasksAll()).filter(t=>t.date===sel).sort(sortT);
+  const list=onDate(byFilter(tasksAll()),sel).sort(sortT);
   $("#agCount").textContent=list.length?`${list.filter(t=>!t.done).length} из ${list.length} осталось`:DOW[d.getDay()];
   $("#agenda").innerHTML=list.length?list.map(taskLi).join(""):`<li class="empty">На этот день ничего нет. Наговорите дела сверху или добавьте вручную.</li>`;
   $("#exNote").hidden=!!ofKind("task").length;
@@ -769,7 +809,7 @@ function renderAgenda(){
 function renderUpcoming(){
   const t=today();let h="";
   for(let i=0;i<7;i++){
-    const k=iso(addDays(t,i)),list=byFilter(tasksAll()).filter(x=>x.date===k&&!x.done).sort(sortT);
+    const k=iso(addDays(t,i)),list=onDate(byFilter(tasksAll()),k).filter(x=>!x.done).sort(sortT);
     if(!list.length)continue;const d=addDays(t,i);
     h+=`<div class="up-day"><div class="lbl">${i===0?"Сегодня":i===1?"Завтра":DOW[d.getDay()]} · ${d.getDate()} ${MONTHS[d.getMonth()]}</div><ul class="list">${list.map(taskLi).join("")}</ul></div>`;
   }
@@ -942,8 +982,8 @@ $("#editor").addEventListener("paste",e=>{const html=e.clipboardData&&e.clipboar
 function widgetItems(){
   const t=today(),k0=iso(t),k1=iso(addDays(t,1));
   const f=x=>(wcfg.cat==="all"||x.cat===wcfg.cat)&&(wcfg.done||!x.done);
-  const a=tasksAll().filter(x=>x.date===k0&&f(x)).sort(sortT);
-  const b=wcfg.tomorrow?tasksAll().filter(x=>x.date===k1&&f(x)).sort(sortT):[];
+  const a=onDate(tasksAll(),k0).filter(f).sort(sortT);
+  const b=wcfg.tomorrow?onDate(tasksAll(),k1).filter(f).sort(sortT):[];
   let n=wcfg.n;const A=a.slice(0,n);n-=A.length;return {A,B:b.slice(0,Math.max(0,n))};
 }
 function renderWSettings(){
@@ -985,10 +1025,37 @@ function localParse(text,hint){
   for(const p of parts){for(const s of p.split(R(String.raw`,\s*(?=(?:в|во|на|завтра|послезавтра|сегодня|до)\s)`))){const r=parseOne(s,hint);if(r){if(r.kind==="note"&&CHECK_RE.test(s))toChecklist(r);out.push(r)}}}
   return out;
 }
+const WD_RE=[["понедельник",1],["вторник",2],["сред",3],["четверг",4],["пятниц",5],["суббот",6],["воскресень",0]];
+function parseRepeat(str){
+  const t=R(String.raw`\b(?:каждый|каждую|каждое|каждые|по)\s+(?:будням|будним\s+дням|будний\s+день)\b`);
+  if(t.test(str))return {rp:{freq:"weekdays"},re:t};
+  const d=R(String.raw`\b(?:каждый\s+день|ежедневно|каждое\s+утро|каждый\s+вечер)\b`);
+  if(d.test(str))return {rp:{freq:"daily"},re:d};
+  // «каждый понедельник», «по вторникам и четвергам», «каждую среду и пятницу»
+  const wk=str.match(R(String.raw`\b(каждый|каждую|каждое|по|раз\s+в\s+две\s+недели\s+(?:в|во|по))\s+((?:(?:понедельник|вторник|сред|четверг|пятниц|суббот|воскресень)\S*(?:\s*(?:,|и)\s*)?)+)`));
+  if(wk){const days=WD_RE.filter(([w])=>R(w).test(wk[2])).map(([,n])=>n);if(days.length)return {rp:{freq:/две/i.test(wk[1])?"biweekly":"weekly",days},re:wk[0]}}
+  const bw=R(String.raw`\b(?:раз\s+в\s+две\s+недели|каждые\s+две\s+недели|раз\s+в\s+2\s+недели)\b`);
+  if(bw.test(str))return {rp:{freq:"biweekly"},re:bw};
+  const w=R(String.raw`\b(?:каждую\s+неделю|еженедельно|раз\s+в\s+неделю)\b`);
+  if(w.test(str))return {rp:{freq:"weekly"},re:w};
+  const mn=str.match(R(String.raw`\bкаждое\s+(\d{1,2})(?:-?е|-?го)?\s+число\b|\b(\d{1,2})(?:-?го)?\s+числа\s+каждого\s+месяца\b`));
+  if(mn)return {rp:{freq:"monthly"},re:mn[0],dom:+(mn[1]||mn[2])};
+  const m=R(String.raw`\b(?:каждый\s+месяц|ежемесячно|раз\s+в\s+месяц)\b`);
+  if(m.test(str))return {rp:{freq:"monthly"},re:m};
+  const y=R(String.raw`\b(?:каждый\s+год|ежегодно|раз\s+в\s+год)\b`);
+  if(y.test(str))return {rp:{freq:"yearly"},re:y};
+  return null;
+}
 function parseOne(s,hint){
-  let str=" "+s+" ",date=today(),time="",found=false;
+  let str=" "+s+" ",date=today(),time="",found=false,repeat=null;
   const rm=re=>{str=str.replace(re," ")};
   const word=w=>R("\\b"+w+"\\b");
+  const pr=parseRepeat(str);
+  if(pr){repeat=pr.rp;rm(pr.re);found=true;
+    if(repeat.days){const td=today().getDay();const diffs=repeat.days.map(n=>(n-td+7)%7);date=addDays(today(),Math.min(...diffs))}
+    if(pr.dom){let d=new Date(today().getFullYear(),today().getMonth(),Math.min(pr.dom,dim(today().getFullYear(),today().getMonth())));if(d<today())d=new Date(today().getFullYear(),today().getMonth()+1,Math.min(pr.dom,dim(today().getFullYear(),today().getMonth()+1)));date=d}
+    if(repeat.freq==="weekdays"){while([0,6].includes(date.getDay()))date=addDays(date,1)}
+  }
   if(word("послезавтра").test(str)){date=addDays(today(),2);found=true;rm(word("послезавтра"))}
   else if(word("завтра").test(str)){date=addDays(today(),1);found=true;rm(word("завтра"))}
   else if(word("сегодня").test(str)){found=true;rm(word("сегодня"))}
@@ -1020,7 +1087,8 @@ function parseOne(s,hint){
   if(title.length<2)return null;
   title=title[0].toUpperCase()+title.slice(1);
   const cat=ANC_RE.test(s)?"anc":WORK_RE.test(s)?defaultCompany():(kind==="note"?defaultCompany():"personal");
-  if(kind==="task")return {kind,title,date:iso(date),time,cat,text:""};
+  if(repeat&&kind!=="task"&&!IDEA_RE.test(s)&&!NOTE_RE.test(s))kind="task";
+  if(kind==="task")return {kind,title,date:iso(date),time,cat,text:"",...(repeat?{repeat}:{})};
   if(kind==="idea"){const [t,...rest]=title.split(/[:—]\s*/);return {kind,title:t.trim(),text:rest.join(" ").trim(),cat}}
   return {kind,title:title.length>60?title.slice(0,57)+"…":title,text:title,cat,noteId};
 }
@@ -1051,6 +1119,7 @@ async function aiParse(text,hint){
 - title: короткое название с заглавной буквы, без слов о дате и времени
 - date: YYYY-MM-DD (только для task; если не сказано — сегодня; «в пятницу» — ближайшая будущая пятница)
 - time: HH:MM в 24-часовом формате или "" (только для task; «в 3 дня» = 15:00, «в 7 вечера» = 19:00)
+- repeat: только для повторяющихся дел, иначе null. Объект {"freq": "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly", "days": [номера дней недели для weekly/biweekly, 0 = воскресенье, 1 = понедельник … 6 = суббота], "until": "YYYY-MM-DD" или ""}. «Каждый день» = daily, «по будням» = weekdays, «каждый понедельник и четверг» = weekly с days [1,4], «раз в две недели по пятницам» = biweekly с days [5], «каждое 5 число» = monthly (date — ближайшее 5-е число), «каждый год» = yearly. Для повторов date — первое повторение.
 - cat: одна из трёх категорий:
   "work" — компания КАДИС;
   "anc" — компания «Найдём предков»;
@@ -1069,7 +1138,10 @@ async function aiParse(text,hint){
   return arr.filter(x=>x&&x.title).map(x=>({
     kind:["task","idea","note"].includes(x.kind)?x.kind:"task",title:String(x.title),
     date:/^\d{4}-\d{2}-\d{2}$/.test(x.date||"")?x.date:iso(t),time:/^\d{2}:\d{2}$/.test(x.time||"")?x.time:"",
-    cat:CATS.includes(x.cat)?x.cat:"personal",text:String(x.text||""),noteId:ids.has(x.noteId)?x.noteId:""}));
+    cat:CATS.includes(x.cat)?x.cat:"personal",text:String(x.text||""),noteId:ids.has(x.noteId)?x.noteId:"",
+    ...(x.repeat&&FREQ.some(([k])=>k&&k===x.repeat.freq)?{repeat:{freq:x.repeat.freq,
+      ...(Array.isArray(x.repeat.days)&&x.repeat.days.length&&["weekly","biweekly"].includes(x.repeat.freq)?{days:x.repeat.days.map(Number).filter(n=>n>=0&&n<=6)}:{}),
+      ...(/^\d{4}-\d{2}-\d{2}$/.test(x.repeat.until||"")?{until:x.repeat.until}:{})}}:{})}));
 }
 async function doParse(){
   const text=$("#voice").value.trim();if(!text){$("#voice").focus();return}
@@ -1090,7 +1162,7 @@ function showPreview(){
       <input type="text" value="${esc(p.title)}" data-f="title" aria-label="Название">
       <button class="del" data-act="rm" aria-label="Убрать">${X}</button>
       <div class="meta">${p.kind==="task"
-        ?`<input type="date" value="${p.date}" data-f="date" aria-label="Дата"><input type="time" value="${p.time}" data-f="time" aria-label="Время">${p.text?`<span class="txt">${esc(p.text)}</span>`:""}`
+        ?`<input type="date" value="${p.date}" data-f="date" aria-label="Дата"><input type="time" value="${p.time}" data-f="time" aria-label="Время"><select data-rep aria-label="Повтор">${freqOptions(p.repeat&&p.repeat.freq)}</select>${p.repeat&&p.repeat.freq?`<span class="txt">${repLabel({date:p.date,repeat:p.repeat})}</span>`:""}${p.text?`<span class="txt">${esc(p.text)}</span>`:""}`
         :`${p.kind==="note"?`<select data-f="noteId" aria-label="Куда записать">${noteOpts(p)}</select>`:""}${p.text?`<span class="txt">${esc(p.text.slice(0,140))}</span>`:""}`}</div>
     </div>`).join("");
   pv.hidden=false;$("#previewActions").hidden=false;
@@ -1103,12 +1175,13 @@ $("#preview").addEventListener("click",e=>{
   showPreview();
 });
 $("#preview").addEventListener("input",e=>{const row=e.target.closest(".pv");if(row&&e.target.dataset.f)pending[+row.dataset.i][e.target.dataset.f]=e.target.value});
-$("#preview").addEventListener("change",e=>{const row=e.target.closest(".pv");if(row&&e.target.dataset.f)pending[+row.dataset.i][e.target.dataset.f]=e.target.value});
+$("#preview").addEventListener("change",e=>{if(e.target.matches("[data-rep]")){const p=pending[+e.target.closest(".pv").dataset.i];const f=e.target.value;
+  if(!f)delete p.repeat;else p.repeat={freq:f,...(["weekly","biweekly"].includes(f)?{days:p.repeat&&p.repeat.days&&p.repeat.days.length?p.repeat.days:[fromIso(p.date).getDay()]}:{})};showPreview();return}const row=e.target.closest(".pv");if(row&&e.target.dataset.f)pending[+row.dataset.i][e.target.dataset.f]=e.target.value});
 $("#addAll").onclick=async()=>{
   const cnt={task:0,idea:0,note:0};let lastNote=null,firstTask=null;
   for(const p of pending){
     cnt[p.kind]++;
-    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",remind:newRem(p.time),done:false,created:Date.now()},{silent:true});firstTask=firstTask||p}
+    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",remind:newRem(p.time),done:false,created:Date.now(),...(p.repeat&&p.repeat.freq?{repeat:p.repeat}:{})},{silent:true});firstTask=firstTask||p}
     if(p.kind==="idea")save({id:p.id,kind:"idea",title:p.title,text:p.text||"",cat:p.cat,created:Date.now()},{silent:true});
     if(p.kind==="note"){
       const body=textToHtml(p.text||p.title);
@@ -1136,12 +1209,20 @@ $("#cal").onclick=e=>{const b=e.target.closest(".day");if(!b)return;sel=b.datase
 $("#prevM").onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()-1,1);renderCal()};
 $("#nextM").onclick=()=>{view=new Date(view.getFullYear(),view.getMonth()+1,1);renderCal()};
 $("#todayBtn").onclick=()=>{const t=today();sel=iso(t);view=new Date(t.getFullYear(),t.getMonth(),1);render()};
-document.addEventListener("change",e=>{if(e.target.classList.contains("chk")){const li=e.target.closest(".task");const t=items.find(x=>x.id===li.dataset.id);if(t)save({...t,done:e.target.checked})}});
-document.addEventListener("click",e=>{const d=e.target.closest(".task [data-del]");if(d){remove(d.closest(".task").dataset.id);toast("Удалено")}});
+document.addEventListener("change",e=>{if(!e.target.classList.contains("chk"))return;const li=e.target.closest(".task");const t=items.find(x=>x.id===li.dataset.id);if(!t)return;
+  const occ=li.dataset.occ;
+  if(occ){const dd=new Set(t.doneDates||[]);e.target.checked?dd.add(occ):dd.delete(occ);save({...t,doneDates:[...dd].filter(x=>x>=iso(addDays(today(),-60))).sort()})}
+  else save({...t,done:e.target.checked})});
+document.addEventListener("click",e=>{const d=e.target.closest(".task [data-del]");if(!d)return;const li=d.closest(".task");
+  if(li.dataset.occ){skipOcc(li.dataset.id,li.dataset.occ);toast("Убрано только "+fmtDate(fromIso(li.dataset.occ))+". Всю серию можно удалить в окне дела",4000)}
+  else{remove(li.dataset.id);toast("Удалено")}});
+function skipOcc(id,occ){const t=items.find(x=>x.id===id);if(!t)return;const sk=new Set(t.skipDates||[]);sk.add(occ);save({...t,skipDates:[...sk].sort()})}
 $("#addForm").onsubmit=e=>{e.preventDefault();
   const t={id:uid(),title:$("#fTitle").value.trim(),date:$("#fDate").value,time:$("#fTime").value,cat:$("#fCat").value,note:$("#fNote").value.trim(),remind:+$("#fRem").value,done:false,created:Date.now()};
+  if($("#fRep").value)t.repeat={freq:$("#fRep").value,...(["weekly","biweekly"].includes($("#fRep").value)?{days:[fromIso(t.date).getDay()]}:{})};
   if(!t.title)return;if(!t.time&&$("#fRem").dataset.auto==="1")t.remind=-1;
-  sel=t.date;save(t);$("#fTitle").value="";$("#fNote").value="";$("#fTime").value="";syncFRem();toast("Добавлено")};
+  sel=t.date;save(t);$("#fTitle").value="";$("#fNote").value="";$("#fTime").value="";$("#fRep").value="";syncFRem();toast("Добавлено")};
+$("#fRep").innerHTML=freqOptions("");
 function syncFRem(){const f=$("#fRem");const v=newRem($("#fTime").value);f.innerHTML=remOptions(v);f.dataset.auto="1"}
 $("#fTime").addEventListener("change",()=>{if($("#fRem").dataset.auto==="1")syncFRem()});
 $("#fRem").addEventListener("change",()=>{$("#fRem").dataset.auto="0"});
@@ -1155,7 +1236,9 @@ window.addEventListener("hashchange",()=>{$("#tab-notes").classList.remove("open
 
 /* ---------- export .ics ---------- */
 $("#exportIcs").onclick=async()=>{
-  const list=byFilter(ofKind("task")).filter(t=>!t.done&&t.date>=iso(today()));
+  const td0=iso(today());
+  const list=byFilter(ofKind("task")).filter(t=>t.repeat&&t.repeat.freq?!(t.repeat.until&&t.repeat.until<td0):(!t.done&&t.date>=td0));
+  const BYDAY=["SU","MO","TU","WE","TH","FR","SA"];
   if(!list.length){toast("Нет будущих дел для экспорта");return}
   const stamp=new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
   const ics=s=>String(s).replace(/\\/g,"\\\\").replace(/[,;]/g,m=>"\\"+m).replace(/\n/g,"\\n");
@@ -1164,6 +1247,14 @@ $("#exportIcs").onclick=async()=>{
     const d=t.date.replace(/-/g,"");out.push("BEGIN:VEVENT","UID:"+t.id+"@planer","DTSTAMP:"+stamp);
     if(t.time){const[h,mi]=t.time.split(":").map(Number);const end=new Date(2000,0,1,h,mi+30);out.push("DTSTART:"+d+"T"+t.time.replace(":","")+"00","DTEND:"+d+"T"+pad(end.getHours())+pad(end.getMinutes())+"00")}
     else out.push("DTSTART;VALUE=DATE:"+d,"DTEND;VALUE=DATE:"+iso(addDays(fromIso(t.date),1)).replace(/-/g,""));
+    const rp=t.repeat;
+    if(rp&&rp.freq){
+      const days=(rp.days&&rp.days.length?rp.days:[fromIso(t.date).getDay()]).map(i=>BYDAY[i]).join(",");
+      let rule={daily:"FREQ=DAILY",weekdays:"FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",weekly:"FREQ=WEEKLY;BYDAY="+days,biweekly:"FREQ=WEEKLY;INTERVAL=2;BYDAY="+days,monthly:"FREQ=MONTHLY",yearly:"FREQ=YEARLY"}[rp.freq];
+      if(rp.until)rule+=";UNTIL="+rp.until.replace(/-/g,"")+(t.time?"T235959":"");
+      out.push("RRULE:"+rule);
+      for(const x of t.skipDates||[])out.push(t.time?"EXDATE:"+x.replace(/-/g,"")+"T"+t.time.replace(":","")+"00":"EXDATE;VALUE=DATE:"+x.replace(/-/g,""));
+    }
     out.push("SUMMARY:"+ics(t.title),"CATEGORIES:"+CAT[t.cat]);if(t.note)out.push("DESCRIPTION:"+ics(t.note));
     const rm=effRem(t);
     if(rm>=0){const off=t.time?-rm:540-rm;out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+ics(t.title),"TRIGGER:"+(off<0?"-":"")+"PT"+Math.abs(off)+"M","END:VALARM")}
@@ -1194,7 +1285,8 @@ function notifyTask(t){
 function checkReminders(silent){
   const now=Date.now();let ch=false;
   for(const k in firedMap)if(firedMap[k]<now-3*864e5){delete firedMap[k];ch=true}
-  for(const t of ofKind("task")){
+  const all=ofKind("task"),occs=[-1,0,1].flatMap(o=>onDate(all,iso(addDays(today(),o))));
+  for(const t of occs){
     if(t.done)continue;const at=remAt(t);if(at==null||at>now||at<now-6*3600e3)continue;
     const key=t.id+"@"+at;if(firedMap[key])continue;firedMap[key]=now;ch=true;if(!silent)notifyTask(t);
   }
@@ -1224,28 +1316,53 @@ $("#nfTest").onclick=async()=>{
 };
 
 /* ---------- task editor ---------- */
-let editId=null,eDelArm=0,lastFocus=null;
-function openEdit(id){
+let editId=null,editOcc=null,eDays=[],eDelArm=0,lastFocus=null;
+function renderEDays(){
+  const f=$("#eRep").value,wk=f==="weekly"||f==="biweekly";$("#eDaysW").hidden=!wk;$("#eUntilW").hidden=!f;
+  $("#eDateL").textContent=f?"Начиная с":"Дата";
+  $("#eDays").innerHTML=DOW_ORDER.map(i=>`<button type="button" data-d="${i}" aria-pressed="${eDays.includes(i)}">${DOW_SHORT[i]}</button>`).join("");
+}
+function openEdit(id,occ){
   const t=items.find(x=>x.id===id&&!x.deleted);
   if(!t){toast("Это пример. Добавьте своё дело, и его можно будет изменить",3500);return}
-  editId=id;lastFocus=document.activeElement;
+  const rp=t.repeat&&t.repeat.freq?t.repeat:null;
+  editId=id;editOcc=rp?occ||null:null;lastFocus=document.activeElement;
   $("#eTitle").value=t.title;$("#eDate").value=t.date;$("#eTime").value=t.time||"";$("#eCat").value=t.cat;
-  $("#eRem").innerHTML=remOptions(effRem(t));$("#eNote").value=t.note||"";$("#eDone").checked=!!t.done;
-  eDelArm=0;$("#eDel").textContent="Удалить";$("#editBg").hidden=false;setTimeout(()=>$("#eTitle").focus(),30);
+  $("#eRem").innerHTML=remOptions(effRem(t));$("#eNote").value=t.note||"";
+  $("#eDone").checked=editOcc?(t.doneDates||[]).includes(editOcc):!!t.done;
+  $("#eDoneL").textContent=editOcc?"Выполнено "+fmtDate(fromIso(editOcc)):"Выполнено";
+  $("#eRep").innerHTML=freqOptions(rp?rp.freq:"");eDays=rp&&rp.days&&rp.days.length?[...rp.days]:[fromIso(t.date).getDay()];
+  $("#eUntil").value=rp&&rp.until||"";renderEDays();
+  $("#editT").textContent=rp?"Изменить повторяющееся дело":"Изменить дело";
+  eDelArm=0;$("#eDel").textContent="Удалить";$("#eDelChoice").hidden=true;$("#editBg").hidden=false;setTimeout(()=>$("#eTitle").focus(),30);
 }
+$("#eRep").addEventListener("change",()=>{if(!eDays.length)eDays=[fromIso($("#eDate").value||iso(today())).getDay()];renderEDays()});
+$("#eDays").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const d=+b.dataset.d;
+  eDays=eDays.includes(d)?eDays.filter(x=>x!==d):[...eDays,d];if(!eDays.length)eDays=[d];renderEDays()});
 function closeEdit(){$("#editBg").hidden=true;editId=null;if(lastFocus&&lastFocus.focus)try{lastFocus.focus()}catch(e){}}
 $("#editForm").onsubmit=e=>{e.preventDefault();
   const t=items.find(x=>x.id===editId);if(!t){closeEdit();return}
   const title=$("#eTitle").value.trim();if(!title){$("#eTitle").focus();return}
-  const upd={...t,title,date:$("#eDate").value||t.date,time:$("#eTime").value,cat:$("#eCat").value,remind:+$("#eRem").value,note:$("#eNote").value.trim(),done:$("#eDone").checked};
-  closeEdit();sel=upd.date;const d=fromIso(sel);view=new Date(d.getFullYear(),d.getMonth(),1);save(upd);toast("Сохранено")};
+  const f=$("#eRep").value,date=$("#eDate").value||t.date;
+  const upd={...t,title,date,time:$("#eTime").value,cat:$("#eCat").value,remind:+$("#eRem").value,note:$("#eNote").value.trim()};
+  if(f){
+    upd.repeat={freq:f};if(f==="weekly"||f==="biweekly")upd.repeat.days=[...eDays].sort();
+    const u=$("#eUntil").value;if(u){if(u<date){toast("Дата окончания раньше начала");$("#eUntil").focus();return}upd.repeat.until=u}
+    const dd=new Set(t.doneDates||[]);const key=editOcc||date;$("#eDone").checked?dd.add(key):dd.delete(key);upd.doneDates=[...dd].sort();upd.done=false;
+  }else{delete upd.repeat;delete upd.doneDates;delete upd.skipDates;upd.done=$("#eDone").checked;if(editOcc&&t.repeat)upd.date=date===t.date?editOcc:date}
+  closeEdit();sel=f?(editOcc&&occurs(upd,editOcc)?editOcc:upd.date):upd.date;const d=fromIso(sel);view=new Date(d.getFullYear(),d.getMonth(),1);save(upd);toast("Сохранено")};
 $("#eTime").addEventListener("change",()=>{if($("#eTime").value&&$("#eRem").value==="-1")$("#eRem").value=String(defRem<0?15:defRem)});
-$("#eDel").onclick=()=>{if(Date.now()-eDelArm>3000){eDelArm=Date.now();$("#eDel").textContent="Точно удалить?";setTimeout(()=>{if($("#eDel"))$("#eDel").textContent="Удалить"},3000);return}
+$("#eDel").onclick=()=>{
+  if(editOcc){$("#eDelOne").textContent="Только "+fmtDate(fromIso(editOcc));$("#eDelChoice").hidden=false;return}
+  if(Date.now()-eDelArm>3000){eDelArm=Date.now();$("#eDel").textContent="Точно удалить?";setTimeout(()=>{if($("#eDel"))$("#eDel").textContent="Удалить"},3000);return}
   const id=editId;closeEdit();remove(id);toast("Удалено")};
+$("#eDelOne").onclick=()=>{const id=editId,o=editOcc;closeEdit();skipOcc(id,o);toast("Убрано только "+fmtDate(fromIso(o)))};
+$("#eDelAll").onclick=()=>{const id=editId;closeEdit();remove(id);toast("Серия удалена")};
+$("#eDelNo").onclick=()=>{$("#eDelChoice").hidden=true};
 $("#eCancel").onclick=closeEdit;$("#editX").onclick=closeEdit;
 $("#editBg").addEventListener("click",e=>{if(e.target===$("#editBg"))closeEdit()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#editBg").hidden)closeEdit()});
-document.addEventListener("click",e=>{const b=e.target.closest(".task [data-edit]");if(b)openEdit(b.closest(".task").dataset.id)});
+document.addEventListener("click",e=>{const b=e.target.closest(".task [data-edit]");if(b){const li=b.closest(".task");openEdit(li.dataset.id,li.dataset.occ)}});
 
 let tt;function toast(m,ms=2600){const el=$("#toast");el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,ms)}
 
