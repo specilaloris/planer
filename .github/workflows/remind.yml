@@ -5,6 +5,7 @@
 #   TELEGRAM_CHAT_ID    — ваш id в Telegram (узнать у @userinfobot)
 # Если хранилище называется не planer-data, создайте переменную DATA_REPO = логин/название.
 # Утренняя сводка (план на день и сроки) приходит в 8:00 и закрепляется в чате. Другое время: переменная DIGEST_TIME = 07:30, выключить: off.
+# Сразу за сводкой приходят новости. Выключить: переменная NEWS = off.
 # Журнал запусков в публичном репозитории виден всем, поэтому названия дел в него не пишутся.
 
 name: Напоминания в Telegram
@@ -37,6 +38,7 @@ jobs:
       TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
       TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
       DIGEST_TIME: ${{ vars.DIGEST_TIME || '08:00' }}
+      NEWS: ${{ vars.NEWS || '' }}
     steps:
       - name: Отправить напоминания
         shell: bash
@@ -102,12 +104,77 @@ jobs:
               if(at<=now&&at>now-6*3600e3&&!sent[key])due.push({t:{...t,date:day},at,key});
             }
           }
+          // сроки сдачи: due (YYYY-MM-DD), dueTime, dueRem (минуты до срока; -1 = нет; по умолчанию 1440)
+          for(const t of items){
+            if(!t||t.deleted||(t.kind&&t.kind!=="task")||!t.due||t.done||(t.repeat&&t.repeat.freq))continue;
+            const r=typeof t.dueRem==="number"?t.dueRem:1440;if(r<0)continue;
+            const [y,m,d]=t.due.split("-").map(Number),[h,mi]=(t.dueTime||"09:00").split(":").map(Number);
+            const at=new Date(y,m-1,d,h,mi).getTime()-r*60000,key=t.id+"@due@"+at;
+            if(at<=now&&(at>now-6*3600e3||now<at+r*60000)&&!sent[key])due.push({t,at,key,dl:true});
+          }
           due.sort((a,b)=>a.at-b.at);
           let changed=false,ok=0;
-          for(const {t,key} of due){
+          const tomorrow=dates[2];
+          const human=d=>Number(d.slice(8))+" "+MON[Number(d.slice(5,7))-1];
+          for(const {t,key,dl} of due){
+            if(dl){
+              const w=(t.due===today?"сегодня":t.due===tomorrow?"завтра":human(t.due))+(t.dueTime?" в "+t.dueTime:"");
+              const text=["🚩 Срок сдачи: "+t.title,"Срок "+w+" · "+(CAT[t.cat]||"Личное"),t.note||""].filter(Boolean).join("\n");
+              if(await tg(text)){sent[key]=now;changed=true;ok++}
+              continue;
+            }
             const when=t.date===today?(t.time?"Сегодня в "+t.time:"Сегодня"):(Number(t.date.slice(8))+" "+MON[Number(t.date.slice(5,7))-1]+(t.time?" в "+t.time:""));
             const text=["⏰ "+t.title,when+" · "+(CAT[t.cat]||"Личное"),t.note||""].filter(Boolean).join("\n");
             if(await tg(text)){sent[key]=now;changed=true;ok++}
+          }
+          // новости к утренней сводке: RSS-ленты; основные источники по очереди, запасные (fb) только если не хватило
+          // переменная NEWS = off выключает новости; названия новостей в журнал не пишутся
+          const NEWS=[
+            {title:"💻 IT-новости",n:7,feeds:[
+              {name:"Хабр",url:"https://habr.com/ru/rss/news/?fl=ru"},
+              {name:"3DNews",url:"https://3dnews.ru/news/rss/"},
+              {name:"CNews",url:"https://www.cnews.ru/inc/rss/news.xml"},
+              {name:"iXBT",url:"https://www.ixbt.com/export/news.rss"},
+              {name:"Google Новости",google:true,fb:true,url:"https://news.google.com/rss/search?q="+encodeURIComponent("IT технологии when:1d")+"&hl=ru&gl=RU&ceid=RU:ru"}]}];
+          async function sendNews(){
+            if(String(process.env.NEWS||"").trim().toLowerCase()==="off")return;
+            const ent={quot:'"',apos:"'",lt:"<",gt:">",nbsp:" ",laquo:"«",raquo:"»",mdash:"—",ndash:"–",hellip:"…",rsquo:"’",lsquo:"‘",ldquo:"“",rdquo:"”",amp:"&"};
+            const dec=s=>String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<[^>]+>/g," ")
+              .replace(/&#(\d+);/g,(m,n)=>String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi,(m,n)=>String.fromCodePoint(parseInt(n,16)))
+              .replace(/&([a-z]+);/gi,(m,n)=>ent[n.toLowerCase()]??m).replace(/\s+/g," ").trim();
+            const tag=(x,n)=>{const m=x.match(new RegExp("<"+n+"(?:\\s[^>]*)?>([\\s\\S]*?)</"+n+">","i"));return m?m[1]:""};
+            async function feed(f){
+              try{
+                const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),12000);
+                const r=await fetch(f.url,{signal:ac.signal,headers:{"User-Agent":"Mozilla/5.0 (compatible; planer-digest)","Accept":"application/rss+xml, application/atom+xml, application/xml, text/xml"}});
+                clearTimeout(tm);if(!r.ok)return [];
+                const xml=await r.text();
+                const blocks=xml.match(/<item[\s>][\s\S]*?<\/item>/gi)||xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi)||[];
+                return blocks.map(b=>{
+                  let title=dec(tag(b,"title")),link=dec(tag(b,"link")),src=f.name;
+                  if(!/^https?:/.test(link)){const m=b.match(/<link[^>]*href="([^"]+)"/i);link=m?m[1].replace(/&amp;/g,"&"):""}
+                  if(f.google){const m=title.match(/^(.*\S)\s+[-–—]\s+([^-–—]{2,60})$/);if(m){title=m[1];src=m[2].trim()}}
+                  const ds=dec(tag(b,"pubDate")||tag(b,"published")||tag(b,"updated")||tag(b,"dc:date"));
+                  return {title:title.length>160?title.slice(0,157)+"…":title,link,src,t:ds?(Date.parse(ds)||0):0};
+                }).filter(x=>x.title&&/^https?:/.test(x.link)).sort((a,b)=>b.t-a.t);
+              }catch(e){return []}
+            }
+            const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+            const fresh=Date.now()-36*3600e3,parts=[];
+            for(const sec of NEWS){
+              const res=await Promise.all(sec.feeds.map(f=>feed(f).then(l=>({f,l}))));
+              const seen=new Set(),pick=[];
+              const take=lists=>{for(let i=0;i<40&&pick.length<sec.n;i++)for(const l of lists){const x=l[i];if(!x||pick.length>=sec.n||(x.t&&x.t<fresh))continue;
+                const k=x.title.toLowerCase().replace(/[^a-zа-яё0-9]/gi,"").slice(0,50);if(seen.has(k))continue;seen.add(k);pick.push(x)}};
+              take(res.filter(x=>!x.f.fb).map(x=>x.l));
+              if(pick.length<sec.n)take(res.filter(x=>x.f.fb).map(x=>x.l));
+              console.log("Раздел новостей "+(NEWS.indexOf(sec)+1)+": ответило источников "+res.filter(x=>x.l.length).length+" из "+res.length+", новостей "+pick.length);
+              if(pick.length)parts.push("<b>"+esc(sec.title)+"</b>\n"+pick.map(x=>"• <a href=\""+esc(x.link)+"\">"+esc(x.title)+"</a> <i>— "+esc(x.src)+"</i>").join("\n"));
+            }
+            if(!parts.length)return;
+            let text=parts.join("\n\n");if(text.length>4000)text=text.slice(0,text.lastIndexOf("\n•",4000));
+            const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({chat_id:TG_CHAT,text,parse_mode:"HTML",disable_web_page_preview:true})});
+            console.log("Новости:",r.ok?"отправлены":"не отправились ("+r.status+")");
           }
           // утренняя сводка: раз в день после DIGEST_TIME, закрепляется в чате (видна в виджете Telegram)
           const DIG=String(process.env.DIGEST_TIME||"08:00").trim();
@@ -136,9 +203,10 @@ jobs:
                 try{await post("unpinAllChatMessages",{});if(j.result&&j.result.message_id)await post("pinChatMessage",{message_id:j.result.message_id,disable_notification:true})}catch(e){}
               }
               console.log("Утренняя сводка:",r.ok?"отправлена":"не отправилась ("+r.status+")");
+              try{await sendNews()}catch(e){console.log("Новости: ошибка",e.message)}
             }
           }
-          for(const k of Object.keys(sent))if(sent[k]<now-3*864e5){delete sent[k];changed=true}
+          for(const k of Object.keys(sent))if(sent[k]<now-14*864e5){delete sent[k];changed=true}
           if(changed){
             const body={message:"Напоминания: отметка отправленных",content:Buffer.from(JSON.stringify(sent)).toString("base64")};
             if(state.sha)body.sha=state.sha;
