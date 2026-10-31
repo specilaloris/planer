@@ -272,6 +272,17 @@ body.wmode .bnav{display:none}
   .task{grid-template-columns:auto 44px 1fr auto;gap:8px}
   .form{grid-template-columns:1fr}
 }
+.day{position:relative}
+.dlm{position:absolute;top:4px;right:6px;width:7px;height:10px;background:var(--danger);clip-path:polygon(0 0,100% 0,100% 100%,50% 70%,0 100%)}
+.day.sel .dlm{background:var(--bg)}
+.due{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.due.soon{background:var(--idea-soft);color:var(--idea)}
+.due.late{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
+.due.done{opacity:.7}
+.grp{list-style:none;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:10px 2px 0;display:flex;align-items:center;gap:6px}
+.grp.late{color:var(--danger)}
+.up-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg);font-weight:700}
+.task.due-mode .time{font-size:12px;color:var(--danger)}
 a.btn{color:var(--fg)}
 #wgSync{cursor:pointer}
 .pipw{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
@@ -312,7 +323,7 @@ a.btn{color:var(--fg)}
     <textarea id="voice"></textarea>
     <div class="hint">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-      <span>Микрофон на клавиатуре телефона или Win+H на ПК. Дела с датой уйдут в календарь, «идея…» — в идеи, «запиши в заметку…» — в заметки.</span>
+      <span>Микрофон на клавиатуре телефона или Win+H на ПК. Дела с датой уйдут в календарь, «сдать до пятницы» станет сроком, «идея…» — в идеи, «запиши в заметку…» — в заметки.</span>
     </div>
     <div class="row">
       <button class="btn primary" id="parseBtn">Разобрать</button>
@@ -339,7 +350,6 @@ a.btn{color:var(--fg)}
       <div class="cal" id="cal"></div>
       <div class="legend"><span><i style="background:var(--life)"></i>Личное</span><span><i style="background:var(--work)"></i>КАДИС</span><span><i style="background:var(--anc)"></i>Найдём предков</span></div>
       <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px">
-        <div class="lbl">Ближайшие 7 дней</div>
         <div id="upcoming"></div>
       </div>
     </section>
@@ -356,6 +366,7 @@ a.btn{color:var(--fg)}
           <select id="fCat" aria-label="Категория"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select>
           <select id="fRem" aria-label="Напомнить"></select>
           <select class="full" id="fRep" aria-label="Повтор"></select>
+          <label class="fld full"><span class="lbl">Срок сдачи, если есть</span><input type="date" id="fDue"></label>
           <input class="full" id="fNote" placeholder="Заметка (необязательно)">
           <button class="btn primary full" type="submit">Добавить</button>
         </form>
@@ -496,6 +507,8 @@ a.btn{color:var(--fg)}
       <div class="field">
         <span class="lbl">Для новых дел со временем</span>
         <select id="defRem" class="btn" aria-label="Напоминание по умолчанию"></select>
+        <span class="lbl" style="margin-top:8px">О сроке сдачи</span>
+        <select id="defDueRem" class="btn" aria-label="Напоминание о сроке по умолчанию"></select>
         <span class="hint">У каждого дела можно поменять: нажмите на него в календаре. Для дел без времени напоминание считается от 9:00.</span>
       </div>
       <div class="field">
@@ -552,6 +565,11 @@ a.btn{color:var(--fg)}
       <label class="fld"><span class="lbl" id="eDateL">Дата</span><input type="date" id="eDate" required></label>
       <label class="fld"><span class="lbl">Время</span><input type="time" id="eTime"></label>
     </div>
+    <div class="form2" id="eDueW">
+      <label class="fld"><span class="lbl">Срок сдачи</span><input type="date" id="eDue"></label>
+      <label class="fld"><span class="lbl">Время срока</span><input type="time" id="eDueTime"></label>
+    </div>
+    <label class="fld" id="eDueRemW"><span class="lbl">Напомнить о сроке</span><select id="eDueRem"></select></label>
     <div class="form2">
       <label class="fld"><span class="lbl">Категория</span><select id="eCat"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select></label>
       <label class="fld"><span class="lbl">Напомнить</span><select id="eRem"></select></label>
@@ -613,6 +631,22 @@ const newRem=time=>time?defRem:-1;
 const effRem=t=>typeof t.remind==="number"?t.remind:(t.time?15:-1);
 function remAt(t){const r=effRem(t);if(r<0||!t.date)return null;const[y,m,d]=t.date.split("-").map(Number);const[h,mi]=(t.time||"09:00").split(":").map(Number);return new Date(y,m-1,d,h,mi).getTime()-r*60000}
 function remShort(t){const at=remAt(t);if(at==null)return "";const a=new Date(at);return pad(a.getHours())+":"+pad(a.getMinutes())+(iso(a)!==t.date?" накануне":"")}
+/* deadlines: due (YYYY-MM-DD), dueTime (HH:MM|""), dueRem (minutes before; -1 = off; missing = 1440). Only for one-off tasks. */
+const DREM=[[-1,"Не напоминать"],[0,"В момент срока"],[60,"За 1 час"],[180,"За 3 часа"],[1440,"За день"],[2880,"За 2 дня"],[4320,"За 3 дня"],[10080,"За неделю"]];
+const dremOptions=v=>DREM.map(([k,l])=>`<option value="${k}"${k===v?" selected":""}>${l}</option>`).join("");
+let defDueRem=ls.get("pl.defDueRem",1440);
+const hasDue=t=>!!(t&&t.due&&!(t.repeat&&t.repeat.freq));
+const effDueRem=t=>typeof t.dueRem==="number"?t.dueRem:(t.due?1440:-1);
+function dueRemAt(t){if(!hasDue(t))return null;const r=effDueRem(t);if(r<0)return null;const[y,m,d]=t.due.split("-").map(Number);const[h,mi]=(t.dueTime||"09:00").split(":").map(Number);return new Date(y,m-1,d,h,mi).getTime()-r*60000}
+const plural=(n,f)=>{const a=Math.abs(n)%100,b=a%10;return f[a>10&&a<20?2:b===1?0:b>=2&&b<=4?1:2]};
+function dueInfo(t){
+  const n=Math.round((fromIso(t.due)-today())/864e5);
+  const txt=n<0?`просрочено на ${-n} ${plural(-n,["день","дня","дней"])}`:n===0?"сегодня":n===1?"завтра":`через ${n} ${plural(n,["день","дня","дней"])}`;
+  return {n,txt,cls:t.done?"done":n<0?"late":n<=2?"soon":"ok"};
+}
+const FLAG='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>';
+function dueBadge(t){if(!hasDue(t))return "";const i=dueInfo(t);return `<span class="due ${i.cls}">${FLAG} срок ${fmtDate(fromIso(t.due))}${t.dueTime?" "+t.dueTime:""} · ${t.done?"сдано":i.txt}</span>`}
+const shortD=k=>+k.slice(8)+"."+k.slice(5,7);
 /* repeat: {freq:"daily"|"weekdays"|"weekly"|"biweekly"|"monthly"|"yearly", days?:[0..6], until?:"YYYY-MM-DD"} */
 const FREQ=[["","Не повторять"],["daily","Каждый день"],["weekdays","По будням (пн–пт)"],["weekly","Каждую неделю"],["biweekly","Каждые 2 недели"],["monthly","Каждый месяц"],["yearly","Каждый год"]];
 const DOW_ORDER=[1,2,3,4,5,6,0],DOW_SHORT=["вс","пн","вт","ср","чт","пт","сб"];
@@ -643,14 +677,14 @@ function repLabel(t){
   let l={daily:"каждый день",weekdays:"по будням",weekly:"каждую неделю: "+ds(),biweekly:"раз в 2 недели: "+ds(),monthly:"каждый месяц, "+s.getDate()+" числа",yearly:"каждый год, "+s.getDate()+" "+MONTHS[s.getMonth()]}[rp.freq]||"";
   if(rp.until)l+=", до "+fmtDate(fromIso(rp.until));return l;
 }
-const sortT=(a,b)=>(a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99"));
+const sortT=(a,b)=>(!!a.done-!!b.done)||(a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99"));
 
 function exTasks(){
   const t=today(),d0=iso(t),d1=iso(addDays(t,1)),d3=iso(addDays(t,3));
   return [
     {id:"ex1",title:"Созвон с командой по серверу",date:d0,time:"10:00",cat:"work",ex:true},
     {id:"ex2",title:"Тренировка с гирей",date:d0,time:"19:30",cat:"personal",repeat:{freq:"weekly",days:[1,3,5]},ex:true},
-    {id:"ex3",title:"Отправить отчёт клиенту",date:d1,time:"12:00",cat:"work",ex:true},
+    {id:"ex3",title:"Отправить отчёт клиенту",date:d1,time:"12:00",cat:"work",due:iso(addDays(t,4)),dueTime:"18:00",ex:true},
     {id:"ex4",title:"Забрать посылку",date:d3,time:"",cat:"personal",ex:true},
     {id:"ex5",title:"Настроить VPN для нового сотрудника",date:d1,time:"",cat:"anc",ex:true}];
 }
@@ -814,43 +848,60 @@ function render(){
 function renderCal(){
   $("#monthT").textContent=MONTHS_N[view.getMonth()]+" "+view.getFullYear();
   const start=addDays(view,-((view.getDay()+6)%7));
-  const byDate={},src=byFilter(tasksAll());
+  const byDate={},src=byFilter(tasksAll());const dl=new Set(src.filter(t=>hasDue(t)&&!t.done).map(t=>t.due));
   for(let i=0;i<42;i++){const k=iso(addDays(start,i));for(const t of src)if(occurs(t,k))(byDate[k]=byDate[k]||new Set()).add(t.cat)}
   let h=DOW_S.map(d=>`<div class="dow">${d}</div>`).join("");const td=iso(today());
   for(let i=0;i<42;i++){
     const d=addDays(start,i),k=iso(d);
     if(i===35&&d.getMonth()!==view.getMonth())break;
     const cats=byDate[k]?[...byDate[k]]:[];
-    h+=`<button class="day${d.getMonth()!==view.getMonth()?" out":""}${k===td?" today":""}${k===sel?" sel":""}" data-d="${k}" aria-label="${d.getDate()} ${MONTHS[d.getMonth()]}${cats.length?", есть дела":""}"><span class="n">${d.getDate()}</span><span class="dots">${cats.sort().reverse().map(c=>`<i class="${c}"></i>`).join("")}</span></button>`;
+    h+=`<button class="day${d.getMonth()!==view.getMonth()?" out":""}${k===td?" today":""}${k===sel?" sel":""}" data-d="${k}" aria-label="${d.getDate()} ${MONTHS[d.getMonth()]}${cats.length?", есть дела":""}${dl.has(k)?", срок сдачи":""}"><span class="n">${d.getDate()}</span>${dl.has(k)?'<span class="dlm"></span>':""}<span class="dots">${cats.sort().reverse().map(c=>`<i class="${c}"></i>`).join("")}</span></button>`;
   }
   $("#cal").innerHTML=h;
 }
-function taskLi(t){
-  const meta=[t.repeat&&t.repeat.freq?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> ${repLabel(t)}`:"",!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
-  return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}" data-id="${t.id}"${t.occ?` data-occ="${t.occ}"`:""}>
+function taskLi(t,mode){
+  const meta=[t.repeat&&t.repeat.freq?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> ${repLabel(t)}`:"",!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",mode==="due"&&t.date?"начало "+fmtDate(fromIso(t.date)):"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
+  const dm=mode==="due";
+  return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}${dm?" due-mode":""}" data-id="${t.id}"${t.occ?` data-occ="${t.occ}"`:""}>
     <input type="checkbox" class="chk" ${t.done?"checked":""} ${t.ex?"disabled":""} aria-label="Готово">
-    <span class="time mono">${t.time||"—"}</span>
-    <button type="button" class="t" data-edit ${t.ex?'tabindex="-1"':'title="Изменить"'}><b>${esc(t.title)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}${meta?`<small>${meta}</small>`:""}</button>
+    <span class="time mono">${dm?(t.dueTime||"срок"):(t.time||"—")}</span>
+    <button type="button" class="t" data-edit ${t.ex?'tabindex="-1"':'title="Изменить"'}><b>${esc(t.title)}</b>${t.note?`<small>${esc(t.note)}</small>`:""}${meta?`<small>${meta}</small>`:""}${hasDue(t)?`<small>${dueBadge(t)}</small>`:""}</button>
     ${t.ex?"<span></span>":`<button class="del" data-del aria-label="Удалить">${X}</button>`}</li>`;
 }
 function renderAgenda(){
   const d=fromIso(sel),td=iso(today());
   const rel=sel===td?"Сегодня, ":sel===iso(addDays(today(),1))?"Завтра, ":"";
   $("#agDate").textContent=`${rel}${d.getDate()} ${MONTHS[d.getMonth()]}`;
-  const list=onDate(byFilter(tasksAll()),sel).sort(sortT);
-  $("#agCount").textContent=list.length?`${list.filter(t=>!t.done).length} из ${list.length} осталось`:DOW[d.getDay()];
-  $("#agenda").innerHTML=list.length?list.map(taskLi).join(""):`<li class="empty">На этот день ничего нет. Наговорите дела сверху или добавьте вручную.</li>`;
+  const all=byFilter(tasksAll());
+  const list=onDate(all,sel).sort(sortT);
+  const byDue=(a,b)=>(!!a.done-!!b.done)||(a.due+(a.dueTime||"99")).localeCompare(b.due+(b.dueTime||"99"));
+  const dueList=all.filter(t=>hasDue(t)&&t.due===sel&&t.date!==sel).sort(byDue);
+  const prog=all.filter(t=>hasDue(t)&&!t.done&&t.date<sel&&t.due>sel&&sel>=td).sort(byDue);
+  const late=sel===td?all.filter(t=>hasDue(t)&&!t.done&&t.due<td).sort(byDue):[];
+  const grp=(txt,c="")=>`<li class="grp ${c}">${FLAG} ${txt}</li>`;
+  let h=list.length?list.map(x=>taskLi(x)).join(""):`<li class="empty">${dueList.length||prog.length||late.length?"Новых дел на этот день нет.":"На этот день ничего нет. Наговорите дела сверху или добавьте вручную."}</li>`;
+  if(late.length)h+=grp("Срок прошёл","late")+late.map(x=>taskLi(x,"due")).join("");
+  if(dueList.length)h+=grp("Срок сдачи в этот день")+dueList.map(x=>taskLi(x,"due")).join("");
+  if(prog.length)h+=grp("В работе, срок впереди")+prog.map(x=>taskLi(x,"due")).join("");
+  const nd=dueList.filter(t=>!t.done).length;
+  $("#agCount").textContent=list.length?`${list.filter(t=>!t.done).length} из ${list.length} осталось${nd?` · сроков: ${nd}`:""}`:(nd?`сроков: ${nd}`:DOW[d.getDay()]);
+  $("#agenda").innerHTML=h;
   $("#exNote").hidden=!!ofKind("task").length;
   $("#fDate").value=sel;
 }
 function renderUpcoming(){
-  const t=today();let h="";
+  const t=today(),lim=iso(addDays(t,14));
+  const dls=byFilter(tasksAll()).filter(x=>hasDue(x)&&!x.done&&x.due<=lim).sort((a,b)=>(a.due+(a.dueTime||"99")).localeCompare(b.due+(b.dueTime||"99"))).slice(0,6);
+  let h=`<div class="up-day"><div class="up-h">Сроки на две недели</div>${dls.length?`<ul class="list">${dls.map(x=>taskLi(x,"due")).join("")}</ul>`:`<div class="empty">Сроков нет. Скажите «сдать до пятницы» или укажите срок в окне дела.</div>`}</div>`;
+  h+=`<div class="up-day" style="margin-top:12px"><div class="up-h">Ближайшие 7 дней</div></div>`;
+  let any=false;
   for(let i=0;i<7;i++){
     const k=iso(addDays(t,i)),list=onDate(byFilter(tasksAll()),k).filter(x=>!x.done).sort(sortT);
-    if(!list.length)continue;const d=addDays(t,i);
-    h+=`<div class="up-day"><div class="lbl">${i===0?"Сегодня":i===1?"Завтра":DOW[d.getDay()]} · ${d.getDate()} ${MONTHS[d.getMonth()]}</div><ul class="list">${list.map(taskLi).join("")}</ul></div>`;
+    if(!list.length)continue;const d=addDays(t,i);any=true;
+    h+=`<div class="up-day"><div class="lbl">${i===0?"Сегодня":i===1?"Завтра":DOW[d.getDay()]} · ${d.getDate()} ${MONTHS[d.getMonth()]}</div><ul class="list">${list.map(x=>taskLi(x)).join("")}</ul></div>`;
   }
-  $("#upcoming").innerHTML=h||`<div class="empty">На неделю дел нет</div>`;
+  if(!any)h+=`<div class="empty">На неделю дел нет</div>`;
+  $("#upcoming").innerHTML=h;
 }
 
 /* ideas */
@@ -1021,15 +1072,16 @@ function widgetItems(){
   const f=x=>(wcfg.cat==="all"||x.cat===wcfg.cat)&&(wcfg.done||!x.done);
   const a=onDate(tasksAll(),k0).filter(f).sort(sortT);
   const b=wcfg.tomorrow?onDate(tasksAll(),k1).filter(f).sort(sortT):[];
-  let n=wcfg.n;const A=a.slice(0,n);n-=A.length;return {A,B:b.slice(0,Math.max(0,n))};
+  const lim=iso(addDays(t,7));const D=tasksAll().filter(x=>hasDue(x)&&!x.done&&x.due<=lim&&(wcfg.cat==="all"||x.cat===wcfg.cat)).sort((p,q)=>p.due.localeCompare(q.due)).slice(0,3);
+  let n=wcfg.n;const A=a.slice(0,n);n-=A.length;return {A,B:b.slice(0,Math.max(0,n)),D};
 }
 function renderWSettings(){
   $$("#wCat button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.c===wcfg.cat));
   $$("#wCount button").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.n===wcfg.n));
   $("#wTomorrow").checked=wcfg.tomorrow;$("#wDone").checked=wcfg.done;
-  const {A,B}=widgetItems(),t=today();
+  const {A,B,D}=widgetItems(),t=today();
   const li=x=>`<li><i style="background:${color(x.cat)}"></i><span class="mono" style="opacity:.7;font-size:12px">${x.time||"··"}</span>${esc(x.title)}</li>`;
-  $("#miniW").innerHTML=`<div class="md">${t.getDate()} ${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}</div><ul>${A.map(li).join("")||"<li>Свободный день</li>"}</ul>${B.length?`<div class="md">Завтра</div><ul>${B.map(li).join("")}</ul>`:""}`;
+  $("#miniW").innerHTML=`<div class="md">${t.getDate()} ${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}</div><ul>${A.map(li).join("")||"<li>Свободный день</li>"}</ul>${B.length?`<div class="md">Завтра</div><ul>${B.map(li).join("")}</ul>`:""}${D.length?`<div class="md">Сроки</div><ul>${D.map(x=>`<li><i style="background:var(--danger)"></i><span class="mono" style="opacity:.7;font-size:12px">${shortD(x.due)}</span>${esc(x.title)}</li>`).join("")}</ul>`:""}`;
 }
 function widgetBody(){
   const {A,B,D=[]}=widgetItems();
@@ -1107,6 +1159,21 @@ const BD="(?:(?<![А-Яа-яЁёA-Za-z0-9])(?=[А-Яа-яЁёA-Za-z0-9])|(?<=[А
 const R=(src,f="i")=>new RegExp(src.split("\\b").join(BD),f);
 const WORK_RE=R(String.raw`кадис|работ|офис|созвон|митинг|совещан|планерк|коллег|начальник|руководит|отч[её]т|клиент|заказчик|проект|задач[аиу]|тикет|сервер|деплой|релиз|баг|код|\bпк\b|компьютер|ноутбук|принтер|роутер|сеть|дедлайн|презентац|договор|сч[её]т|выезд|1с|админ`);
 const ANC_RE=R(String.raw`найд[её]м\s+предк|найти\s+предк|\bпредк`);
+const WDAYS=[["воскресень",0],["понедельник",1],["вторник",2],["сред",3],["четверг",4],["пятниц",5],["суббот",6]];
+const MON_RE=["январ","феврал","март","апрел","ма[йя]","июн","июл","август","сентябр","октябр","ноябр","декабр"];
+const DUE_PRE=String.raw`(?:\b(?:дедлайн|срок(?:\s+сдачи)?)\s*[:—-]?\s*(?:(?:до|к|на)\s+)?|\b(?:до|к)\s+)`;
+function findDue(str,PRE=DUE_PRE){
+  const t0=today();let m;
+  m=str.match(R(PRE+String.raw`(послезавтра|завтра\S*(?:\s+дн\S*)?|сегодня\S*(?:\s+дн\S*)?|конца\s+дня)\b`));
+  if(m){const w=m[1].toLowerCase();return {date:w.startsWith("послез")?addDays(t0,2):w.startsWith("завтр")?addDays(t0,1):t0,m:m[0]}}
+  m=str.match(R(String.raw`\b(?:до|к)\s+конц\S*\s+недел\S*`));if(m)return {date:addDays(t0,(7-t0.getDay())%7),m:m[0]};
+  for(const[w,n] of WDAYS){m=str.match(R(PRE+String.raw`(?:следующ\S*\s+)?\b`+w+String.raw`\S*`));if(m)return {date:addDays(t0,(n-t0.getDay()+7)%7||7),m:m[0]}}
+  m=str.match(R(PRE+String.raw`(\d{1,2})(?:-?го)?\s+(`+MON_RE.join("|")+String.raw`)\S*`));
+  if(m){const mi=MON_RE.findIndex(x=>new RegExp("^"+x,"i").test(m[2]));let d=new Date(t0.getFullYear(),mi,+m[1]);if(d<t0)d.setFullYear(d.getFullYear()+1);return {date:d,m:m[0]}}
+  m=str.match(R(PRE+String.raw`(\d{1,2})[./](\d{1,2})\b`));
+  if(m&&+m[2]>=1&&+m[2]<=12&&+m[1]>=1&&+m[1]<=31){let d=new Date(t0.getFullYear(),+m[2]-1,+m[1]);if(d<t0)d.setFullYear(d.getFullYear()+1);return {date:d,m:m[0]}}
+  return null;
+}
 const IDEA_RE=R(String.raw`\bиде[яюи]\b|\bпридумать\b|а что если|можно было бы|\bхорошо бы\b`);
 const NOTE_RE=R(String.raw`\bзаметк|\bзапиш|\bзаписать\b|\bзапомни|\bинфа\b|\bлогин\b|\bпароль\b`);
 const CHECK_RE=R(String.raw`чек-?\s?лист|\bсписок\b|\bсписком\b`);
@@ -1120,9 +1187,9 @@ function toChecklist(r){
   if(!r.noteId)r.title=head?head[0].toUpperCase()+head.slice(1):"Чек-лист";
 }
 function localParse(text,hint){
-  const parts=text.replace(/\s+/g," ").split(R(String.raw`[.;!\n]+|,\s*(?=(?:а\s+)?(?:потом|затем|ещё|еще|также)\b)|\s+(?:а потом|потом|затем|и ещё|и еще)\s+|(?=\b(?:ещё |еще |новая )?(?:идея|заметк)\b)`)).map(s=>s.trim()).filter(s=>s.length>2);
+  const parts=text.replace(/\s+/g," ").split(R(String.raw`(?:[;!\n]|\.(?!\d))+|,\s*(?=(?:а\s+)?(?:потом|затем|ещё|еще|также)\b)|\s+(?:а потом|потом|затем|и ещё|и еще)\s+|(?=\b(?:ещё |еще |новая )?(?:идея|заметк)\b)`)).map(s=>s.trim()).filter(s=>s.length>2);
   const out=[];
-  for(const p of parts){for(const s of p.split(R(String.raw`,\s*(?=(?:в|во|на|завтра|послезавтра|сегодня|до)\s)`))){const r=parseOne(s,hint);if(r){if(r.kind==="note"&&CHECK_RE.test(s))toChecklist(r);out.push(r)}}}
+  for(const p of parts){for(const s of p.split(R(String.raw`,\s*(?=(?:в|во|на|завтра|послезавтра|сегодня|каждый|каждую|каждое|каждые|ежедневно|дедлайн)\s)`))){const r=parseOne(s,hint);if(r){if(r.kind==="note"&&CHECK_RE.test(s))toChecklist(r);out.push(r)}else{const lt=out[out.length-1];if(lt&&lt.kind==="task"&&!lt.due&&!lt.repeat&&R(String.raw`\b(?:дедлайн|срок)`).test(s)){const dd=findDue(" "+s+" ");if(dd)lt.due=iso(dd.date)}}}}
   return out;
 }
 const WD_RE=[["понедельник",1],["вторник",2],["сред",3],["четверг",4],["пятниц",5],["суббот",6],["воскресень",0]];
@@ -1147,7 +1214,7 @@ function parseRepeat(str){
   return null;
 }
 function parseOne(s,hint){
-  let str=" "+s+" ",date=today(),time="",found=false,repeat=null;
+  let str=" "+s+" ",date=today(),time="",found=false,repeat=null,due=null;
   const rm=re=>{str=str.replace(re," ")};
   const word=w=>R("\\b"+w+"\\b");
   const pr=parseRepeat(str);
@@ -1156,6 +1223,10 @@ function parseOne(s,hint){
     if(pr.dom){let d=new Date(today().getFullYear(),today().getMonth(),Math.min(pr.dom,dim(today().getFullYear(),today().getMonth())));if(d<today())d=new Date(today().getFullYear(),today().getMonth()+1,Math.min(pr.dom,dim(today().getFullYear(),today().getMonth()+1)));date=d}
     if(repeat.freq==="weekdays"){while([0,6].includes(date.getDay()))date=addDays(date,1)}
   }
+  if(!repeat){let dd=findDue(str);
+    const kw=str.search(R(String.raw`\b(?:дедлайн|срок|сдать|сдач)`));
+    if(!dd&&kw>=0){dd=findDue(str.slice(kw),String.raw`(?:\b(?:в|во|на)\s+)?`);if(dd&&/^(?:послезавтра|завтра|сегодня|конца)/i.test(dd.m.trim()))dd=null;if(dd)rm(R(String.raw`\b(?:дедлайн\S*|срок(?:\s+сдачи)?)\b`))}
+    if(dd){due=dd.date;rm(dd.m)}}
   if(word("послезавтра").test(str)){date=addDays(today(),2);found=true;rm(word("послезавтра"))}
   else if(word("завтра").test(str)){date=addDays(today(),1);found=true;rm(word("завтра"))}
   else if(word("сегодня").test(str)){found=true;rm(word("сегодня"))}
@@ -1171,7 +1242,7 @@ function parseOne(s,hint){
     if(m&&+m[1]<24){let h=+m[1];const per=(m[2]||"").toLowerCase();if((per==="дня"||per==="вечера")&&h<12)h+=12;else if(!per&&h>=1&&h<=7)h+=12;time=pad(h)+":00";found=true;rm(m[0])}}
   rm(word("(утром|днём|днем|вечером)"));
   // kind
-  let kind=IDEA_RE.test(s)?"idea":NOTE_RE.test(s)?"note":found?"task":(hint==="ideas"?"idea":hint==="notes"?"note":"task");
+  let kind=IDEA_RE.test(s)?"idea":NOTE_RE.test(s)?"note":(found||due)?"task":(hint==="ideas"?"idea":hint==="notes"?"note":"task");
   let noteId="";
   if(kind==="idea")rm(R(String.raw`^\s*(?:(?:ещё|еще|новая|вот|у меня)\s+)*(?:идея|идею)\s*[:\-—,]?\s*`));
   if(kind==="note"){
@@ -1183,12 +1254,13 @@ function parseOne(s,hint){
     if(ntitle){const body=str.replace(/\s+/g," ").trim();return {kind,title:ntitle[0].toUpperCase()+ntitle.slice(1),text:body?body[0].toUpperCase()+body.slice(1):ntitle,cat:ANC_RE.test(s)?"anc":defaultCompany(),noteId:""}}
   }
   let title=str.replace(/\s+/g," ").replace(/^[\s,–—:-]+|[\s,–—:-]+$/g,"").trim();
-  title=title.replace(R(String.raw`^(?:(?:надо|нужно|не забыть|напомни(?:ть)?|потом|затем|ещё|еще|а|и|в|во|на|до|к)\s+)+`),"").replace(R(String.raw`\s+(?:в|во|на|до|к)$`),"");
+  title=title.replace(R(String.raw`^(?:(?:надо|нужно|не забыть|напомни(?:ть)?|потом|затем|ещё|еще|а|и|в|во|на|до)\s+)+`),"").replace(R(String.raw`\s+(?:в|во|на|до|к)$`),"");
   if(title.length<2)return null;
+  if(due&&iso(due)<iso(date))date=today();
   title=title[0].toUpperCase()+title.slice(1);
   const cat=ANC_RE.test(s)?"anc":WORK_RE.test(s)?defaultCompany():(kind==="note"?defaultCompany():"personal");
   if(repeat&&kind!=="task"&&!IDEA_RE.test(s)&&!NOTE_RE.test(s))kind="task";
-  if(kind==="task")return {kind,title,date:iso(date),time,cat,text:"",...(repeat?{repeat}:{})};
+  if(kind==="task")return {kind,title,date:iso(date),time,cat,text:"",...(due?{due:iso(due)}:{}),...(repeat?{repeat}:{})};
   if(kind==="idea"){const [t,...rest]=title.split(/[:—]\s*/);return {kind,title:t.trim(),text:rest.join(" ").trim(),cat}}
   return {kind,title:title.length>60?title.slice(0,57)+"…":title,text:title,cat,noteId};
 }
@@ -1219,6 +1291,8 @@ async function aiParse(text,hint){
 - title: короткое название с заглавной буквы, без слов о дате и времени
 - date: YYYY-MM-DD (только для task; если не сказано — сегодня; «в пятницу» — ближайшая будущая пятница)
 - time: HH:MM в 24-часовом формате или "" (только для task; «в 3 дня» = 15:00, «в 7 вечера» = 19:00)
+- due: срок сдачи (дедлайн) YYYY-MM-DD или "" (только для task, не для повторяющихся). «Сдать до пятницы», «к 10 ноября», «дедлайн в среду», «срок — 5 декабря» — это due; date тогда — когда начать (если не сказано, сегодня). «В пятницу» без «до/к/срок» — это date, не due.
+- dueTime: HH:MM или "" — время срока, если названо («до 18:00 пятницы»)
 - repeat: только для повторяющихся дел, иначе null. Объект {"freq": "daily" | "weekdays" | "weekly" | "biweekly" | "monthly" | "yearly", "days": [номера дней недели для weekly/biweekly, 0 = воскресенье, 1 = понедельник … 6 = суббота], "until": "YYYY-MM-DD" или ""}. «Каждый день» = daily, «по будням» = weekdays, «каждый понедельник и четверг» = weekly с days [1,4], «раз в две недели по пятницам» = biweekly с days [5], «каждое 5 число» = monthly (date — ближайшее 5-е число), «каждый год» = yearly. Для повторов date — первое повторение.
 - cat: одна из трёх категорий:
   "work" — компания КАДИС;
@@ -1238,7 +1312,7 @@ async function aiParse(text,hint){
   return arr.filter(x=>x&&x.title).map(x=>({
     kind:["task","idea","note"].includes(x.kind)?x.kind:"task",title:String(x.title),
     date:/^\d{4}-\d{2}-\d{2}$/.test(x.date||"")?x.date:iso(t),time:/^\d{2}:\d{2}$/.test(x.time||"")?x.time:"",
-    cat:CATS.includes(x.cat)?x.cat:"personal",text:String(x.text||""),noteId:ids.has(x.noteId)?x.noteId:"",
+    cat:CATS.includes(x.cat)?x.cat:"personal",due:/^\d{4}-\d{2}-\d{2}$/.test(x.due||"")&&!(x.repeat&&x.repeat.freq)?x.due:"",dueTime:/^\d{2}:\d{2}$/.test(x.dueTime||"")?x.dueTime:"",text:String(x.text||""),noteId:ids.has(x.noteId)?x.noteId:"",
     ...(x.repeat&&FREQ.some(([k])=>k&&k===x.repeat.freq)?{repeat:{freq:x.repeat.freq,
       ...(Array.isArray(x.repeat.days)&&x.repeat.days.length&&["weekly","biweekly"].includes(x.repeat.freq)?{days:x.repeat.days.map(Number).filter(n=>n>=0&&n<=6)}:{}),
       ...(/^\d{4}-\d{2}-\d{2}$/.test(x.repeat.until||"")?{until:x.repeat.until}:{})}}:{})}));
@@ -1262,7 +1336,7 @@ function showPreview(){
       <input type="text" value="${esc(p.title)}" data-f="title" aria-label="Название">
       <button class="del" data-act="rm" aria-label="Убрать">${X}</button>
       <div class="meta">${p.kind==="task"
-        ?`<input type="date" value="${p.date}" data-f="date" aria-label="Дата"><input type="time" value="${p.time}" data-f="time" aria-label="Время"><select data-rep aria-label="Повтор">${freqOptions(p.repeat&&p.repeat.freq)}</select>${p.repeat&&p.repeat.freq?`<span class="txt">${repLabel({date:p.date,repeat:p.repeat})}</span>`:""}${p.text?`<span class="txt">${esc(p.text)}</span>`:""}`
+        ?`<input type="date" value="${p.date}" data-f="date" aria-label="Дата"><input type="time" value="${p.time}" data-f="time" aria-label="Время">${p.repeat&&p.repeat.freq?"":`<span class="txt">срок</span><input type="date" value="${p.due||""}" data-f="due" aria-label="Срок сдачи">`}<select data-rep aria-label="Повтор">${freqOptions(p.repeat&&p.repeat.freq)}</select>${p.repeat&&p.repeat.freq?`<span class="txt">${repLabel({date:p.date,repeat:p.repeat})}</span>`:""}${p.text?`<span class="txt">${esc(p.text)}</span>`:""}`
         :`${p.kind==="note"?`<select data-f="noteId" aria-label="Куда записать">${noteOpts(p)}</select>`:""}${p.text?`<span class="txt">${esc(p.text.slice(0,140))}</span>`:""}`}</div>
     </div>`).join("");
   pv.hidden=false;$("#previewActions").hidden=false;
@@ -1281,7 +1355,7 @@ $("#addAll").onclick=async()=>{
   const cnt={task:0,idea:0,note:0};let lastNote=null,firstTask=null;
   for(const p of pending){
     cnt[p.kind]++;
-    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",remind:newRem(p.time),done:false,created:Date.now(),...(p.repeat&&p.repeat.freq?{repeat:p.repeat}:{})},{silent:true});firstTask=firstTask||p}
+    if(p.kind==="task"){save({id:p.id,title:p.title,date:p.date,time:p.time,cat:p.cat,note:p.text||"",remind:newRem(p.time),done:false,created:Date.now(),...(p.due&&!(p.repeat&&p.repeat.freq)?{due:p.due<p.date?p.date:p.due,dueTime:p.dueTime||"",dueRem:defDueRem}:{}),...(p.repeat&&p.repeat.freq?{repeat:p.repeat}:{})},{silent:true});firstTask=firstTask||p}
     if(p.kind==="idea")save({id:p.id,kind:"idea",title:p.title,text:p.text||"",cat:p.cat,created:Date.now()},{silent:true});
     if(p.kind==="note"){
       const body=textToHtml(p.text||p.title);
@@ -1321,7 +1395,8 @@ $("#addForm").onsubmit=e=>{e.preventDefault();
   const t={id:uid(),title:$("#fTitle").value.trim(),date:$("#fDate").value,time:$("#fTime").value,cat:$("#fCat").value,note:$("#fNote").value.trim(),remind:+$("#fRem").value,done:false,created:Date.now()};
   if($("#fRep").value)t.repeat={freq:$("#fRep").value,...(["weekly","biweekly"].includes($("#fRep").value)?{days:[fromIso(t.date).getDay()]}:{})};
   if(!t.title)return;if(!t.time&&$("#fRem").dataset.auto==="1")t.remind=-1;
-  sel=t.date;save(t);$("#fTitle").value="";$("#fNote").value="";$("#fTime").value="";$("#fRep").value="";syncFRem();toast("Добавлено")};
+  const due=$("#fDue").value;if(due&&!t.repeat){if(due<t.date){toast("Срок сдачи раньше даты начала");$("#fDue").focus();return}t.due=due;t.dueRem=defDueRem}
+  sel=t.date;save(t);$("#fTitle").value="";$("#fDue").value="";$("#fNote").value="";$("#fTime").value="";$("#fRep").value="";syncFRem();toast("Добавлено")};
 $("#fRep").innerHTML=freqOptions("");
 function syncFRem(){const f=$("#fRem");const v=newRem($("#fTime").value);f.innerHTML=remOptions(v);f.dataset.auto="1"}
 $("#fTime").addEventListener("change",()=>{if($("#fRem").dataset.auto==="1")syncFRem()});
@@ -1337,7 +1412,7 @@ window.addEventListener("hashchange",()=>{$("#tab-notes").classList.remove("open
 /* ---------- export .ics ---------- */
 $("#exportIcs").onclick=async()=>{
   const td0=iso(today());
-  const list=byFilter(ofKind("task")).filter(t=>t.repeat&&t.repeat.freq?!(t.repeat.until&&t.repeat.until<td0):(!t.done&&t.date>=td0));
+  const list=byFilter(ofKind("task")).filter(t=>t.repeat&&t.repeat.freq?!(t.repeat.until&&t.repeat.until<td0):(!t.done&&(t.date>=td0||(hasDue(t)&&t.due>=td0))));
   const BYDAY=["SU","MO","TU","WE","TH","FR","SA"];
   if(!list.length){toast("Нет будущих дел для экспорта");return}
   const stamp=new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z";
@@ -1359,6 +1434,14 @@ $("#exportIcs").onclick=async()=>{
     const rm=effRem(t);
     if(rm>=0){const off=t.time?-rm:540-rm;out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+ics(t.title),"TRIGGER:"+(off<0?"-":"")+"PT"+Math.abs(off)+"M","END:VALARM")}
     out.push("END:VEVENT");
+    if(hasDue(t)&&t.due>=td0){
+      const dd=t.due.replace(/-/g,"");out.push("BEGIN:VEVENT","UID:"+t.id+"-due@planer","DTSTAMP:"+stamp);
+      if(t.dueTime)out.push("DTSTART:"+dd+"T"+t.dueTime.replace(":","")+"00","DTEND:"+dd+"T"+t.dueTime.replace(":","")+"00");
+      else out.push("DTSTART;VALUE=DATE:"+dd,"DTEND;VALUE=DATE:"+iso(addDays(fromIso(t.due),1)).replace(/-/g,""));
+      out.push("SUMMARY:"+ics("Срок: "+t.title),"CATEGORIES:"+CAT[t.cat]);
+      const dr=effDueRem(t);if(dr>=0){const off=t.dueTime?-dr:540-dr;out.push("BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+ics("Срок: "+t.title),"TRIGGER:"+(off<0?"-":"")+"PT"+Math.abs(off)+"M","END:VALARM")}
+      out.push("END:VEVENT");
+    }
   }
   out.push("END:VCALENDAR");
   if(await saveFile(`planer-${filter==="all"?"vse":filter}.ics`,out.join("\r\n"),"text/calendar"))toast("Файл готов: откройте его на телефоне, чтобы добавить дела в календарь",4000);
@@ -1382,13 +1465,22 @@ function notifyTask(t){
   const body=[when,CAT[t.cat],t.note].filter(Boolean).join(" · ");
   toast(`Напоминание: ${t.title}`,9000);beep();showSys(t.title,body,t.id);
 }
+function notifyDue(t){
+  const td=iso(today());
+  const when="Срок "+(t.due===td?"сегодня":t.due===iso(addDays(today(),1))?"завтра":fmtDate(fromIso(t.due)))+(t.dueTime?" в "+t.dueTime:"");
+  toast(`Срок сдачи: ${t.title}`,9000);beep();showSys("Срок: "+t.title,[when,CAT[t.cat]].join(" · "),t.id+"-due");
+}
 function checkReminders(silent){
   const now=Date.now();let ch=false;
-  for(const k in firedMap)if(firedMap[k]<now-3*864e5){delete firedMap[k];ch=true}
+  for(const k in firedMap)if(firedMap[k]<now-14*864e5){delete firedMap[k];ch=true}
   const all=ofKind("task"),occs=[-1,0,1].flatMap(o=>onDate(all,iso(addDays(today(),o))));
   for(const t of occs){
     if(t.done)continue;const at=remAt(t);if(at==null||at>now||at<now-6*3600e3)continue;
     const key=t.id+"@"+at;if(firedMap[key])continue;firedMap[key]=now;ch=true;if(!silent)notifyTask(t);
+  }
+  for(const t of all){
+    if(!hasDue(t)||t.done)continue;const at=dueRemAt(t);if(at==null||at>now)continue;if(at<now-6*3600e3&&now>=at+effDueRem(t)*60000)continue;
+    const key=t.id+"@due@"+at;if(firedMap[key])continue;firedMap[key]=now;ch=true;if(!silent)notifyDue(t);
   }
   if(ch||silent)ls.set("pl.fired",firedMap);
 }
@@ -1398,7 +1490,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 
 /* notifications settings */
 function renderNf(){
-  $("#defRem").innerHTML=remOptions(defRem);
+  $("#defRem").innerHTML=remOptions(defRem);$("#defDueRem").innerHTML=dremOptions(defDueRem);
   const st=$("#nfStatus"),hint=$("#nfHint");let on=false,txt="",h="";
   if(window.claude){txt="внутри страницы";h="В этой версии напоминание показывается на странице со звуком, пока она открыта. Системные уведомления и Telegram работают в версии на GitHub.";$("#nfOn").hidden=true}
   else if(!("Notification" in window)){txt="не поддерживаются";h="Этот браузер не умеет показывать уведомления. На iPhone добавьте планер на экран Домой и откройте оттуда.";$("#nfOn").hidden=true}
@@ -1408,6 +1500,7 @@ function renderNf(){
   st.classList.toggle("on",on);st.lastElementChild.textContent=txt;hint.textContent=h;
 }
 $("#defRem").onchange=e=>{defRem=+e.target.value;ls.set("pl.defRem",defRem);if($("#fRem").dataset.auto==="1")syncFRem();toast("Сохранено")};
+$("#defDueRem").onchange=e=>{defDueRem=+e.target.value;ls.set("pl.defDueRem",defDueRem);toast("Сохранено")};
 $("#nfOn").onclick=async()=>{try{await Notification.requestPermission()}catch(e){}renderNf();if(Notification.permission==="granted")showSys("Планер","Уведомления включены","test")};
 $("#nfTest").onclick=async()=>{
   if(canSys()&&Notification.permission==="default"){try{await Notification.requestPermission()}catch(e){}renderNf()}
@@ -1419,7 +1512,7 @@ $("#nfTest").onclick=async()=>{
 let editId=null,editOcc=null,eDays=[],eDelArm=0,lastFocus=null;
 function renderEDays(){
   const f=$("#eRep").value,wk=f==="weekly"||f==="biweekly";$("#eDaysW").hidden=!wk;$("#eUntilW").hidden=!f;
-  $("#eDateL").textContent=f?"Начиная с":"Дата";
+  $("#eDateL").textContent=f?"Начиная с":"Дата начала";$("#eDueW").hidden=!!f;$("#eDueRemW").hidden=!!f;
   $("#eDays").innerHTML=DOW_ORDER.map(i=>`<button type="button" data-d="${i}" aria-pressed="${eDays.includes(i)}">${DOW_SHORT[i]}</button>`).join("");
 }
 function openEdit(id,occ){
@@ -1429,6 +1522,7 @@ function openEdit(id,occ){
   editId=id;editOcc=rp?occ||null:null;lastFocus=document.activeElement;
   $("#eTitle").value=t.title;$("#eDate").value=t.date;$("#eTime").value=t.time||"";$("#eCat").value=t.cat;
   $("#eRem").innerHTML=remOptions(effRem(t));$("#eNote").value=t.note||"";
+  $("#eDue").value=t.due||"";$("#eDueTime").value=t.dueTime||"";$("#eDueRem").innerHTML=dremOptions(t.due?effDueRem(t):defDueRem);
   $("#eDone").checked=editOcc?(t.doneDates||[]).includes(editOcc):!!t.done;
   $("#eDoneL").textContent=editOcc?"Выполнено "+fmtDate(fromIso(editOcc)):"Выполнено";
   $("#eRep").innerHTML=freqOptions(rp?rp.freq:"");eDays=rp&&rp.days&&rp.days.length?[...rp.days]:[fromIso(t.date).getDay()];
@@ -1445,6 +1539,9 @@ $("#editForm").onsubmit=e=>{e.preventDefault();
   const title=$("#eTitle").value.trim();if(!title){$("#eTitle").focus();return}
   const f=$("#eRep").value,date=$("#eDate").value||t.date;
   const upd={...t,title,date,time:$("#eTime").value,cat:$("#eCat").value,remind:+$("#eRem").value,note:$("#eNote").value.trim()};
+  const due=$("#eDue").value;
+  if(!f&&due){if(due<date){toast("Срок сдачи раньше даты начала");$("#eDue").focus();return}upd.due=due;upd.dueTime=$("#eDueTime").value;upd.dueRem=+$("#eDueRem").value}
+  else{delete upd.due;delete upd.dueTime;delete upd.dueRem}
   if(f){
     upd.repeat={freq:f};if(f==="weekly"||f==="biweekly")upd.repeat.days=[...eDays].sort();
     const u=$("#eUntil").value;if(u){if(u<date){toast("Дата окончания раньше начала");$("#eUntil").focus();return}upd.repeat.until=u}
