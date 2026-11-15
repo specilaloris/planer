@@ -185,8 +185,24 @@ jobs:
             const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),ms);
             try{const r=await fetch(url,{signal:ac.signal,headers:UA,redirect:"follow"});if(!r.ok)return "";return await r.text()}catch(e){return ""}finally{clearTimeout(tm)}
           }
-          const toParas=t=>dec(t).split(/\n+/).map(x=>x.replace(/\s+/g," ").trim()).filter(x=>x.length>1&&!/^(читать далее|читать дальше|подробнее|read more|the post .* appeared first)/i.test(x));
-          const firstImg=h=>{const m=String(h||"").match(/<img[^>]+src=["']([^"']+)["']/i);return m?m[1]:""};
+          // чистка текста: скрипты и рекламный код, служебные хвосты («Использованные источники», «The post … appeared first», «Уважаемый читатель»), голые ссылки
+          const STOP=/^(использованные источники|источники:|уважаемый читатель|the post .{0,200} appeared first|больше (хороших|забавных|позитивных|интересных)?\s*новост|читайте также|смотрите также|по теме:|подписывайтесь|подпишитесь|отправить новость|поделиться|теги:|related:|also read)/i;
+          const JUNK=/yaContextCb|Ya\.Context|renderTo|blockId|adsbygoogle|googletag|window\.|document\.|=>|^\s*[{}()\];,]+\s*$|^\}\)|^function\b|^var |^const |^let /;
+          const DROPL=/^(источник|фото( обложки)?|фото|иллюстрация|реклама|erid|advertisement)\s*[:.]|^(https?:\/\/|www\.)\S+$|^\S+\.(ru|com|org|net)(\/\S*)?$|^(читать далее|читать дальше|подробнее|read more)\b/i;
+          function clean(ps){
+            const out=[];
+            for(let x of ps){
+              x=x.replace(/^время на прочтение:?\s*\d+\s*минут\S*\s*/i,"").replace(/\s+([,.;:!?)])/g,"$1").trim();
+              if(!x)continue;if(STOP.test(x))break;
+              if(JUNK.test(x)||DROPL.test(x)||x.length<3)continue;
+              if(/^[A-Z][A-Z\s’'-]{5,}[:…]/.test(x)||/^(?:[A-Z]{2,}[\s’'-]+){2,}/.test(x)||/^[A-Z]{4,}\s*:/.test(x))continue; // английские промо-строки капслоком
+              out.push(x);
+            }
+            return out;
+          }
+          const toParas=t=>clean(dec(String(t||"").replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi,"")).split(/\n+/).map(x=>x.replace(/\s+/g," ").trim()));
+          const goodImg=u=>u&&/^https?:/.test(u)&&!/s\.w\.org\/images\/core\/emoji|\/emoji\/|gravatar|pixel|counter|1x1/i.test(u);
+          const firstImg=h=>{for(const m of String(h||"").matchAll(/<img[^>]+src=["']([^"']+)["']/gi))if(goodImg(m[1]))return m[1];return ""};
           async function feed(f){
             const xml=await getUrl(f.url);if(!xml)return [];
             const blocks=xml.match(/<item[\s>][\s\S]*?<\/item>/gi)||xml.match(/<entry[\s>][\s\S]*?<\/entry>/gi)||[];
@@ -197,17 +213,51 @@ jobs:
               const raw=(tag(b,"content:encoded")||tag(b,"content")||tag(b,"description")||tag(b,"summary")).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&amp;/g,"&");
               const enc=(b.match(/<(?:enclosure|media:content|media:thumbnail)[^>]+url="([^"]+)"/i)||[])[1];
               const ds=one(tag(b,"pubDate")||tag(b,"published")||tag(b,"updated")||tag(b,"dc:date"));
-              return {title:title.length>200?title.slice(0,197)+"…":title,link,src,google:!!f.google,paras:f.google?[]:toParas(raw),img:(enc||firstImg(raw)||"").replace(/&amp;/g,"&"),t:ds?(Date.parse(ds)||0):0};
+              return {title:title.length>200?title.slice(0,197)+"…":title,link,src,google:!!f.google,paras:f.google?[]:toParas(raw),img:(goodImg(enc)?enc:firstImg(raw)||"").replace(/&amp;/g,"&"),t:ds?(Date.parse(ds)||0):0};
             }).filter(x=>x.title&&/^https?:/.test(x.link)).sort((a,b)=>b.t-a.t);
           }
           // текст со страницы статьи: абзацы внутри <article> (или всей страницы), картинка из og:image
+          // запасной путь к сайтам, которые не пускают сервер GitHub: читалка r.jina.ai открывает страницу сама и отдаёт текст
+          async function viaReader(url,fmt="markdown",ms=25000){
+            const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),ms);
+            try{const r=await fetch("https://r.jina.ai/"+url,{signal:ac.signal,headers:{"User-Agent":UA["User-Agent"],"X-Return-Format":fmt,"Accept":"text/plain"}});return r.ok?await r.text():""}catch(e){return ""}finally{clearTimeout(tm)}
+          }
+          const mdParas=md=>clean(String(md||"").replace(/^[\s\S]*?Markdown Content:\s*/,"").split(/\n\s*\n/).map(x=>x.replace(/!\[[^\]]*\]\([^)]*\)/g,"").replace(/\[([^\]]*)\]\([^)]*\)/g,"$1").replace(/^#+\s*|^[*-]\s+|[*_]{2,}/gm,"").replace(/\s+/g," ").trim()).filter(x=>x.length>40&&!/^(title|url source|published time):/i.test(x)));
+          // автоперевод (Google Переводчик): для кратких русских версий английских статей
+          async function tr(text){
+            text=String(text||"").slice(0,1800);if(!text)return "";
+            try{const j=JSON.parse(await getUrl("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q="+encodeURIComponent(text),12000)||"null");return j&&j[0]?j[0].map(x=>x&&x[0]||"").join("").trim():""}catch(e){return ""}
+          }
+          const isEn=t=>!/[а-яё]/i.test(t)&&(t.match(/[a-z]/gi)||[]).length>t.length*.5;
           async function fromPage(it){
-            if(it.google)return;
-            const html=(await getUrl(it.link,10000)).replace(/<(script|style|noscript|svg|form|nav|footer|header|aside)[\s\S]*?<\/\1>/gi,"");if(!html)return;
+            if(it.google){const u=await gnResolve(it.link);if(!u)return;it.link=u;it.google=false}
+            const raw=await getUrl(it.link,10000);
+            if(!raw){const md=await viaReader(it.link);const ps=mdParas(md);if(ps.join(" ").length>it.paras.join(" ").length){it.paras=ps;it.via=1}
+              if(!it.img){const m=md.match(/!\[[^\]]*\]\((https?:[^)\s]+)/);if(m&&goodImg(m[1]))it.img=m[1]}return}
+            let ld="";for(const m of raw.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)){try{const walk=o=>{if(!o||typeof o!=="object")return;if(typeof o.articleBody==="string"&&o.articleBody.length>ld.length)ld=o.articleBody;Object.values(o).forEach(walk)};walk(JSON.parse(m[1]))}catch(e){}}
+            const html=raw.replace(/<(script|style|noscript|svg|form|nav|footer|header|aside)[\s\S]*?<\/\1>/gi,"");
             const scope=(html.match(/<article[\s\S]*?<\/article>/i)||html.match(/<div[^>]+(?:itemprop=["']articleBody|class=["'][^"']*(?:article|post|entry|content)[^"']*)["'][\s\S]*$/i)||[html])[0];
             const ps=[...scope.matchAll(/<(p|h2|h3|li)[\s>][\s\S]*?<\/\1>/gi)].map(m=>one(m[0])).filter(x=>x.length>40&&!/cookie|подпиш|подписат|реклам|©|все права|telegram-канал|наш канал/i.test(x));
-            if(ps.join(" ").length>it.paras.join(" ").length)it.paras=ps;
-            if(!it.img){const m=html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)/i)||html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image/i);if(m)it.img=m[1].replace(/&amp;/g,"&")}
+            const fromLd=ld?clean(dec(ld).split(/\n+|(?<=[.!?…»])\s{2,}/).map(x=>x.trim())):[];
+            for(const cand of [fromLd,clean(ps)])if(cand.join(" ").length>it.paras.join(" ").length)it.paras=cand;
+            if(it.paras.join(" ").length<400){const ps2=mdParas(await viaReader(it.link));if(ps2.join(" ").length>it.paras.join(" ").length){it.paras=ps2;it.via=1}}
+            if(!it.paras.length){const m=raw.match(/<meta[^>]+(?:property=["']og:description|name=["']description)["'][^>]+content=["']([^"']{40,})/i);if(m)it.paras=[one(m[1])]}
+            if(!it.img){const m=html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)/i)||html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image/i);if(m&&goodImg(m[1]))it.img=m[1].replace(/&amp;/g,"&")}
+          }
+          async function gnResolve(link){
+            try{
+              const id=(link.match(/\/articles\/([^?/#]+)/)||[])[1];if(!id)return "";
+              const pg=await getUrl("https://news.google.com/rss/articles/"+id+"?hl=ru&gl=RU&ceid=RU:ru",10000);
+              const sg=(pg.match(/data-n-a-sg="([^"]+)"/)||[])[1],ts=(pg.match(/data-n-a-ts="([^"]+)"/)||[])[1];if(!sg||!ts)return "";
+              const inner=JSON.stringify(["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],id,+ts,sg]);
+              const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),10000);
+              const r=await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute",{method:"POST",signal:ac.signal,
+                headers:{...UA,"Content-Type":"application/x-www-form-urlencoded;charset=UTF-8"},body:"f.req="+encodeURIComponent(JSON.stringify([[["Fbv4je",inner,null,"generic"]]]))});
+              clearTimeout(tm);if(!r.ok)return "";
+              const txt=await r.text(),line=txt.split("\n").find(l=>l.startsWith("[[")&&l.includes("garturlres"));if(!line)return "";
+              const row=JSON.parse(line).find(x=>x[0]==="wrb.fr");const u=JSON.parse(row[2])[1];
+              return /^https?:/.test(u)&&!/news\.google\./.test(u)?u:"";
+            }catch(e){return ""}
           }
           async function weather(){
             try{
@@ -221,34 +271,113 @@ jobs:
                 min:T(d.temperature_2m_min[0]),max:T(d.temperature_2m_max[0]),rain:d.precipitation_probability_max[0],sunrise:d.sunrise[0].slice(11),sunset:d.sunset[0].slice(11),parts};
             }catch(e){return null}
           }
+          // афиша Петербурга: KudaGo (основной), kuda-spb.ru (запасной, разметка schema.org Event)
+          async function afisha(){
+            if(!PAPER.afisha)return [];
+            const nowS=Math.floor(Date.now()/1000),until=nowS+3*86400,out=[];
+            const MS=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+            const dd=t=>{const d=new Date(t*1000);return d.getDate()+" "+MS[d.getMonth()]};
+            const hm=t=>{const d=new Date(t*1000);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
+            const cap=x=>x?x[0].toUpperCase()+x.slice(1):x;
+            const short=t=>{t=one(t||"");if(t.length<=260)return t;const c=t.slice(0,260);return c.slice(0,Math.max(c.lastIndexOf(". ")+1,200))+"…"};
+            const CATN={exhibition:"Выставка",theater:"Театр",concert:"Концерт",festival:"Фестиваль",party:"Вечеринка",kids:"Детям",education:"Лекция",tour:"Экскурсия",cinema:"Кино",other:"Событие"};
+            try{
+              const u="https://kudago.com/public-api/v1.4/events/?lang=ru&location=spb&page_size=60&text_format=text&expand=place&order_by=-favorites_count"+
+                "&categories=exhibition,theater,concert,festival&actual_since="+nowS+"&actual_until="+until+
+                "&fields=id,title,short_title,dates,place,site_url,images,description,price,is_free,categories";
+              let txt=await getUrl(u,15000),src="KudaGo";
+              if(!/^\s*\{/.test(txt)){const r=await viaReader(u,"text");const a=r.indexOf("{"),b=r.lastIndexOf("}");txt=a>=0?r.slice(a,b+1):"";src="KudaGo через читалку"}
+              let j=null;try{j=JSON.parse(txt||"null")}catch(e){}
+              console.log("Афиша: "+src+(j&&j.results?" ответил, событий "+j.results.length:" не ответил"));
+              for(const e of (j&&j.results)||[]){
+                const iv=(e.dates||[]).filter(d=>d.end>=nowS&&d.start<=until).sort((a,b)=>a.start-b.start)[0];if(!iv)continue;
+                const cat=(e.categories||[]).find(c=>CATN[c])||"other";
+                const long=iv.end-iv.start>2*86400;
+                const when=long?(iv.end>until+300*86400?"постоянно":"до "+dd(iv.end)):(iv.start<nowS?"сейчас":dd(iv.start)+(hm(iv.start)!=="00:00"?", "+hm(iv.start):""));
+                out.push({cat,catName:CATN[cat],title:cap(one(e.title)),when,where:e.place?[one(e.place.title),one(e.place.address)].filter(Boolean).join(", "):"",
+                  price:e.is_free?"бесплатно":one(e.price||""),desc:short(e.description),img:e.images&&e.images[0]&&e.images[0].image||"",link:e.site_url||""});
+              }
+            }catch(e){}
+            if(out.length<4){
+              for(const path of ["event/vystavki/","event/all/today/","event/all/tomorrow/"]){
+                let html=await getUrl("https://kuda-spb.ru/"+path,12000);
+                if(!/ld\+json/.test(html))html=await viaReader("https://kuda-spb.ru/"+path,"html");
+                for(const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)){
+                  let data;try{data=JSON.parse(m[1])}catch(e){continue}
+                  const list=[].concat(data).flatMap(x=>x&&x["@graph"]?x["@graph"]:[x]).flatMap(x=>x&&x.itemListElement?x.itemListElement.map(i=>i.item||i):[x]);
+                  for(const e of list){
+                    if(!e||!/Event/.test([].concat(e["@type"]||"").join(" "))||!e.name)continue;
+                    const st=Date.parse(e.startDate||"")/1000,en=Date.parse(e.endDate||e.startDate||"")/1000;if(en&&en<nowS)continue;
+                    const loc=[].concat(e.location||{})[0]||{},adr=typeof loc.address==="string"?loc.address:(loc.address&&loc.address.streetAddress)||"";
+                    const off=[].concat(e.offers||{})[0]||{};
+                    out.push({cat:"other",catName:/выстав/i.test(e.name+path)?"Выставка":"Событие",title:cap(one(e.name)),
+                      when:en&&st&&en-st>2*86400?"до "+dd(en):(st?dd(st):""),where:[one(loc.name||""),one(adr)].filter(Boolean).join(", "),
+                      price:off.price==0||off.price==="0"?"бесплатно":(off.price?"от "+off.price+" ₽":""),desc:short(e.description),img:[].concat(e.image||"")[0]||"",link:e.url||""});
+                  }
+                }
+                if(out.length>=12)break;
+              }
+            }
+            if(out.length<4){
+              for(const q of ["выставка Петербург открылась when:4d","Петербург спектакль OR концерт OR фестиваль премьера when:3d"]){
+                const l=await feed({name:"Google Новости",google:true,url:"https://news.google.com/rss/search?q="+encodeURIComponent(q)+"&hl=ru&gl=RU&ceid=RU:ru"});
+                for(const x of l.slice(0,5)){const u=await gnResolve(x.link);out.push({cat:"other",catName:/выстав/i.test(x.title)?"Выставка":"Культура",title:x.title,when:"",where:x.src,price:"",desc:"",img:"",link:u||x.link})}
+                if(out.length>=8)break;
+              }
+              console.log("Афиша: добрано из новостей о культуре, всего "+out.length);
+            }
+            // по 3 выставки, 2 спектакля, 2 концерта, 1 фестиваль; остальное добираем по популярности
+            const seen=new Set(),pick=[],uniq=out.filter(x=>x.title&&/^https?:/.test(x.link)&&!seen.has(x.title.toLowerCase())&&seen.add(x.title.toLowerCase()));
+            for(const [c,n] of [["exhibition",3],["theater",2],["concert",2],["festival",1]])pick.push(...uniq.filter(x=>x.cat===c).slice(0,n));
+            for(const x of uniq){if(pick.length>=8)break;if(!pick.includes(x))pick.push(x)}
+            console.log("Афиша: найдено событий "+uniq.length+", в газете "+pick.length);
+            return pick.slice(0,8);
+          }
           async function sendPaper(){
             if(String(process.env.NEWS||"").trim().toLowerCase()==="off")return;
-            const fresh=Date.now()-36*3600e3,secs=[];
+            const secs=[];
             for(const sec of NEWS){
+              const fresh=Date.now()-(sec.days||1.5)*864e5;
               const res=await Promise.all(sec.feeds.map(f=>feed(f).then(l=>({f,l}))));
               const seen=new Set(),pick=[];
               const take=lists=>{for(let i=0;i<40&&pick.length<sec.n;i++)for(const l of lists){const x=l[i];if(!x||pick.length>=sec.n||(x.t&&x.t<fresh))continue;
                 const k=x.title.toLowerCase().replace(/[^a-zа-яё0-9]/gi,"").slice(0,50);if(seen.has(k))continue;seen.add(k);pick.push(x)}};
               take(res.filter(x=>!x.f.fb).map(x=>x.l));
               if(pick.length<sec.n)take(res.filter(x=>x.f.fb).map(x=>x.l));
-              for(let i=0;i<pick.length;i+=4)await Promise.all(pick.slice(i,i+4).map(it=>it.paras.join(" ").length<700?fromPage(it):null));
+              for(let i=0;i<pick.length;i+=4)await Promise.all(pick.slice(i,i+4).map(it=>it.google||it.paras.join(" ").length<700?fromPage(it):null));
               pick.forEach(it=>{let n=0;it.paras=it.paras.filter(p=>(n+=p.length)<=14000)});
-              console.log("Раздел газеты "+(NEWS.indexOf(sec)+1)+": ответило источников "+res.filter(x=>x.l.length).length+" из "+res.length+", статей "+pick.length+", с полным текстом "+pick.filter(x=>x.paras.join(" ").length>=700).length);
+              for(const it of pick)if(isEn(it.title)){const t=await tr(it.title);let sum="",n=0;for(const p of it.paras){if(n>450)break;sum+=(sum?"\n":"")+p;n+=p.length}
+                const s2=await tr(sum);if(t||s2)it.ru={title:t,sum:s2.split(/\n+/).filter(Boolean)}}
+              console.log("Раздел газеты "+(NEWS.indexOf(sec)+1)+": ответило источников "+res.filter(x=>x.l.length).length+" из "+res.length+", статей "+pick.length+", с полным текстом "+pick.filter(x=>x.paras.join(" ").length>=700).length+", через читалку "+pick.filter(x=>x.via).length+", с переводом "+pick.filter(x=>x.ru).length);
+              const dead=res.filter(x=>!x.l.length).map(x=>x.f.name);if(dead.length)console.log("  не ответили: "+[...new Set(dead)].join(", "));
               if(pick.length)secs.push({title:sec.title,items:pick});
             }
             const wx=await weather();
+            const afi=await afisha();
             const nd=new Date(),mo=nd.getMonth()+1,doy=Math.floor((nd-new Date(nd.getFullYear(),0,0))/864e5);
             const qs=QUOTES.filter(x=>!x.m||x.m.includes(mo)),quote=qs[doy%qs.length];
             const DOWN=["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
             const dateLine=nd.getDate()+" "+MON[nd.getMonth()]+" "+nd.getFullYear()+", "+DOWN[nd.getDay()];
-            if(!secs.length&&!wx)return;
+            if(!secs.length&&!wx&&!afi.length)return;
             const P=PAPER,C=P.colors;let no=0;
-            const art=it=>{no++;const long=it.paras.join(" ").length>=700;
-              return `<article id="a${no}"><div class="kick">${escH(it.src)}</div><h3>${escH(it.title)}</h3>`+
-                (it.img&&/^https?:/.test(it.img)?`<img src="${escH(it.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:"")+
-                (it.paras.length?it.paras.map((p,i)=>`<p${i===0?' class="lead"':""}>${escH(p)}</p>`).join(""):`<p class="lead">Полный текст доступен на сайте издания.</p>`)+
-                `<a class="orig" href="${escH(it.link)}">${long?"Оригинал статьи":"Читать на сайте"} — ${escH(it.src)} →</a></article>`};
-            const tocHtml=secs.map(s=>`<div class="tsec"><div class="th">${escH(s.title)}</div><ol>${s.items.map(it=>`<li><a href="#a${++no}">${escH(it.title)}</a></li>`).join("")}</ol></div>`).join("");no=0;
+            const art=it=>{if(it.ru)return artRu(it);no++;const ps=it.paras,all=ps.join(" "),long=all.length>=700;
+              let cut=0,len=0;while(cut<ps.length&&(cut<1||len<200)){len+=ps[cut].length;cut++}
+              if(ps.length-cut<=1)cut=ps.length;
+              const P=(p,i)=>`<p${i===0?' class="lead"':""}>${escH(p)}</p>`,mins=Math.max(1,Math.round(all.split(/\s+/).length/180));
+              return `<article id="a${no}"><div class="kick">${escH(it.src)}${long?` · ${mins} мин`:""}</div><h3>${escH(it.title)}</h3>`+
+                (goodImg(it.img)?`<img src="${escH(it.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:"")+
+                (ps.length?ps.slice(0,cut).map(P).join("")+(cut<ps.length?`<details class="more"><summary>Читать полностью</summary>${ps.slice(cut).map((p,i)=>P(p,i+cut)).join("")}</details>`:""):`<p class="lead muted">Текст этой статьи доступен только на сайте издания.</p>`)+
+                `<a class="orig" href="${escH(it.link)}">${long?"Оригинал":"Читать на сайте"} — ${escH(it.src)} →</a></article>`};
+            const artRu=it=>{no++;const all=it.paras.join(" "),mins=Math.max(1,Math.round(all.split(/\s+/).length/200));
+              return `<article id="a${no}"><div class="kick">${escH(it.src)} · на английском</div><h3>${escH(it.ru.title||it.title)}</h3>${it.ru.title?`<div class="ot">${escH(it.title)}</div>`:""}`+
+                (goodImg(it.img)?`<img src="${escH(it.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:"")+
+                `<div class="ru"><div class="rl">Кратко по-русски · автоперевод</div>${it.ru.sum.map((p,i)=>`<p${i===0?' class="lead"':""}>${escH(p)}</p>`).join("")}</div>`+
+                (it.paras.length?`<details class="more"><summary>Оригинал на английском · ${mins} мин</summary>${it.paras.map(p=>`<p>${escH(p)}</p>`).join("")}</details>`:"")+
+                `<a class="orig" href="${escH(it.link)}">Оригинал — ${escH(it.src)} →</a></article>`};
+            const afiCard=e=>`<article class="ev">${e.img&&/^https?:/.test(e.img)?`<img src="${escH(e.img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">`:""}<div class="kick">${escH(e.catName)}</div><h3>${escH(e.title)}</h3>`+
+              `<div class="evm">${[e.when,e.where,e.price].filter(Boolean).map(escH).join(" · ")}</div>${e.desc?`<p>${escH(e.desc)}</p>`:""}<a class="orig" href="${escH(e.link)}">Подробнее и билеты →</a></article>`;
+            const afiHtml=afi.length?`<h2 class="sec" id="afisha">Афиша Петербурга</h2><div class="evs">${afi.map(afiCard).join("")}</div>`:"";
+            const tocHtml=secs.map(s=>`<div class="tsec"><div class="th">${escH(s.title)}</div><ol>${s.items.map(it=>`<li><a href="#a${++no}">${escH(it.ru&&it.ru.title||it.title)}</a></li>`).join("")}</ol></div>`).join("")+(afi.length?`<div class="tsec"><div class="th"><a href="#afisha">Афиша Петербурга</a></div></div>`:"");no=0;
             const wxHtml=wx?`<section class="wx"><div class="wx-h">Погода · Санкт-Петербург</div><div class="wx-now"><span class="wx-i">${wx.icon}</span><span class="wx-t">${wx.now}</span><span class="wx-d">${escH(wx.desc)}<br><small>ощущается как ${wx.feels} · ветер ${wx.wind} м/с</small></span></div>`+
               `<div class="wx-p">${wx.parts.map(p=>`<div><small>${p.n}</small><b>${p.t}</b><span>${p.w[1]}</span></div>`).join("")}</div>`+
               `<div class="wx-f">днём от ${wx.min} до ${wx.max} · осадки ${wx.rain??0}% · восход ${wx.sunrise}, закат ${wx.sunset}</div></section>`:"";
@@ -279,14 +408,20 @@ jobs:
           article h3{font-family:${P.display};font-size:24px;line-height:1.2;margin:4px 0 10px}
           article img{width:100%;max-height:360px;object-fit:cover;border-radius:4px;margin:4px 0 10px;background:var(--soft)}
           article p{margin:0 0 .7em}article p.lead{font-size:1.07em}
+          .more summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:15px;list-style:none;margin:2px 0 8px}.more summary::-webkit-details-marker{display:none}
+          .more summary::after{content:" ↓"}.more[open] summary{display:none}.muted{color:var(--muted)}
+          .ot{font-size:13px;color:var(--muted);font-style:italic;margin:-6px 0 10px}.ru{background:var(--soft);border-radius:6px;padding:10px 12px;margin-bottom:8px}.ru p:last-child{margin-bottom:0}.rl{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px}
           .orig{display:inline-block;margin-top:4px;color:var(--accent);font-weight:600;text-decoration:none;font-size:15px}
+          .evs{display:grid;grid-template-columns:1fr 1fr;gap:0 18px}@media (max-width:560px){.evs{grid-template-columns:1fr}}
+          .ev h3{font-size:20px}.ev img{max-height:200px}.evm{font-size:14px;color:var(--muted);margin:-4px 0 8px}.toc .th a{color:inherit;text-decoration:none}
           .foot{text-align:center;font-size:12px;color:var(--muted);margin-top:24px;border-top:3px double var(--fg);padding-top:10px}
           </style></head><body><div class="wrap">
-          <header class="mast"><div class="over">${escH(P.over)}</div><h1>${escH(P.title)}</h1><div class="date"><span>${escH(dateLine)}</span><span>${secs.reduce((a,s)=>a+s.items.length,0)} материалов</span></div></header>
+          <header class="mast"><div class="over">${escH(P.over)}</div><h1>${escH(P.title)}</h1><div class="date"><span>${escH(dateLine)}</span><span>${secs.reduce((a,s)=>a+s.items.length,0)} материалов${afi.length?" · афиша":""}</span></div></header>
           <div class="top">${wxHtml}${qHtml}</div>
-          ${secs.length?`<nav class="toc"><div class="th">В номере</div>${tocHtml}</nav>`:""}
+          ${secs.length||afi.length?`<nav class="toc"><div class="th">В номере</div>${tocHtml}</nav>`:""}
           ${secs.map(s=>`<h2 class="sec">${escH(s.title)}</h2>`+s.items.map(art).join("")).join("")}
-          <div class="foot">${escH(P.title)} собирается автоматически из открытых лент изданий. Права на тексты принадлежат издательствам, ссылки на оригиналы — под каждой статьёй.</div>
+          ${afiHtml}
+          <div class="foot">${escH(P.title)} собирается автоматически из открытых лент изданий${PAPER.afisha?" и афиши KudaGo":""}. Права на тексты принадлежат издательствам, ссылки на оригиналы — под каждой статьёй.</div>
           </div></body></html>`;
             const cap=["🗞 "+P.title+" · "+nd.getDate()+" "+MON[nd.getMonth()],wx?wx.icon+" Петербург: "+wx.now+", "+wx.desc+" (днём до "+wx.max+")":"",quote?"«"+quote.q+"»":""].filter(Boolean).join("\n");
             const fd=new FormData();
