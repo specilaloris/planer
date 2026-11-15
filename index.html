@@ -292,6 +292,40 @@ a.btn{color:var(--fg)}
 .wgp .steps code,.wgp .hint code{font-family:var(--f-mono);font-size:12px;background:var(--sunk);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
 .wgp .field .row{margin-bottom:2px}
 .wgp .os{font-family:var(--f-display);font-size:16px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--fg)}
+
+/* ---- documents ---- */
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:26px 16px;border:1.5px dashed var(--line);border-radius:var(--r);background:var(--bg);cursor:pointer;color:var(--muted)}
+.drop b{color:var(--fg);font-weight:600}
+.drop.over{border-color:var(--accent);background:var(--sunk)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.docs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.drow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 10px 10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.dic{width:44px;height:52px;border-radius:7px;display:grid;place-items:end center;padding-bottom:7px;font-family:var(--f-mono);font-size:10px;font-weight:600;letter-spacing:.04em;color:#fff;position:relative;clip-path:polygon(0 0,70% 0,100% 22%,100% 100%,0 100%)}
+.dic::after{content:"";position:absolute;right:0;top:0;width:30%;height:22%;background:rgb(255 255 255/.35);clip-path:polygon(0 0,100% 100%,0 100%)}
+.dic.pdf{background:#C2402F}.dic.doc{background:#2E5DA8}.dic.xls{background:#2F7A47}.dic.ppt{background:#C2662B}.dic.img{background:#7A55A8}.dic.txt{background:#6B7470}.dic.zip{background:#8A6A1E}.dic.vid{background:#38506B}.dic.oth{background:#5C6670}
+.dn{border:0;background:transparent;padding:0;text-align:left;color:inherit;min-width:0;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.dn b{font-weight:500;overflow-wrap:anywhere}
+.dn small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.dn:hover b{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.drow .del[data-arm]{color:var(--danger);background:var(--sunk)}
+.drow.off{opacity:.6}
+.dprog{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.dprog .bad{color:var(--danger)}
+.att{display:flex;flex-wrap:wrap;gap:6px}
+.att:empty{display:none}
+.achip{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:4px 10px 4px 6px;font-size:13px;cursor:pointer;color:var(--fg)}
+.achip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.achip i{font-style:normal;font-family:var(--f-mono);font-size:9px;font-weight:600;color:#fff;border-radius:4px;padding:2px 4px}
+.achip i.pdf{background:#C2402F}.achip i.doc{background:#2E5DA8}.achip i.xls{background:#2F7A47}.achip i.ppt{background:#C2662B}.achip i.img{background:#7A55A8}.achip i.txt{background:#6B7470}.achip i.zip{background:#8A6A1E}.achip i.vid{background:#38506B}.achip i.oth{background:#5C6670}
+.dview{max-width:720px}
+.dbody{border-radius:10px;background:var(--bg);border:1px solid var(--line);min-height:120px;display:grid;place-items:center;overflow:hidden}
+.dbody img,.dbody video{max-width:100%;max-height:60vh;display:block}
+.dbody iframe{width:100%;height:60vh;border:0;background:#fff}
+.dbody pre{margin:0;padding:12px;width:100%;max-height:50vh;overflow:auto;font-family:var(--f-mono);font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;align-self:start}
+.dbody .msg{padding:22px 16px;text-align:center;color:var(--muted);font-size:14px}
+.ffld{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+@media (max-width:720px){.bnav{grid-template-columns:repeat(5,1fr)!important}.bnav a{font-size:10px!important}}
+@media (max-width:480px){.drow{grid-template-columns:36px minmax(0,1fr) auto;gap:10px}.dic{width:36px;height:44px;font-size:9px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -312,6 +346,7 @@ a.btn{color:var(--fg)}
     <a href="#" data-tab="cal">Календарь <span class="cnt" id="cntCal"></span></a>
     <a href="#ideas" data-tab="ideas">Идеи <span class="cnt" id="cntIdeas"></span></a>
     <a href="#notes" data-tab="notes">Заметки <span class="cnt" id="cntNotes"></span></a>
+    <a href="#docs" data-tab="docs">Документы <span class="cnt" id="cntDocs"></span></a>
     <a href="#setup" data-tab="setup">Настройки</a>
   </nav>
 
@@ -397,6 +432,7 @@ a.btn{color:var(--fg)}
         <button class="btn sm ghost" id="nBack">← Все заметки</button>
         <div class="row">
           <select id="nCat" class="btn sm" aria-label="Категория заметки"><option value="personal">Личное</option><option value="work">КАДИС</option><option value="anc">Найдём предков</option></select>
+          <label class="btn sm ghost" style="cursor:pointer" title="Прикрепить файл к заметке"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg> Файл<input type="file" id="nDocIn" multiple hidden></label>
           <button class="btn sm ghost danger" id="nDel">Удалить</button>
         </div>
       </div>
@@ -437,8 +473,28 @@ a.btn{color:var(--fg)}
       </form>
       <div class="linkbar" id="linkInfo" hidden><span>Ссылка:</span><a id="linkOpen" target="_blank" rel="noopener"></a><button class="btn sm ghost" type="button" id="linkEdit">Изменить</button><button class="btn sm ghost" type="button" id="linkRemove">Убрать</button></div>
       <div class="editor" id="editor" contenteditable="true" spellcheck="true"></div>
+      <div class="att" id="nDocs"></div><div class="dprog" id="nDocProg"></div>
       <div class="ed-meta"><span id="nSaved"></span><span id="nEx"></span></div>
     </div>
+  </section>
+
+
+  <!-- DOCUMENTS -->
+  <section id="tab-docs" class="stack" hidden>
+    <div class="panel">
+      <div class="ag-head"><h2 style="font-size:18px">Документы</h2><span class="lbl" id="docUsage"></span></div>
+      <label class="drop" id="drop">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg>
+        <b>Перетащите файлы сюда или нажмите, чтобы выбрать</b>
+        <span id="docLimit">PDF, Word, Excel, картинки и любые другие файлы</span>
+        <input type="file" id="docInput" multiple hidden>
+      </label>
+      <div class="row"><span class="lbl">Раздел для новых файлов</span><select id="docCat" class="btn sm" aria-label="Раздел для новых файлов"></select></div>
+      <p class="hint" id="docNote" style="margin:0" hidden></p>
+      <div class="dprog" id="docProg"></div>
+    </div>
+    <input class="search" id="docSearch" placeholder="Поиск по названию файла" style="border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;width:100%">
+    <ul class="docs" id="docList"></ul>
   </section>
 
   <!-- WIDGET SETTINGS -->
@@ -521,7 +577,7 @@ a.btn{color:var(--fg)}
 
   <div class="panel" id="ghPanel" hidden>
     <div class="ag-head"><h2 style="font-size:18px">Синхронизация через GitHub</h2><span class="sync" id="ghStatus"><i></i><span>не подключено</span></span></div>
-    <p class="hint" style="margin:0">Дела, идеи и заметки хранятся в вашем приватном репозитории на GitHub и одинаковы на всех устройствах. Подключите на каждом устройстве один раз.</p>
+    <p class="hint" style="margin:0">Дела, идеи, заметки и документы хранятся в вашем приватном репозитории на GitHub и одинаковы на всех устройствах. Подключите на каждом устройстве один раз.</p>
     <form class="form" id="ghForm" autocomplete="off">
       <input id="ghRepo" placeholder="логин/planer-data" required>
       <input id="ghToken" type="password" placeholder="Токен доступа github_pat_…">
@@ -555,6 +611,7 @@ a.btn{color:var(--fg)}
   <a href="#" data-tab="cal"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Календарь</a>
   <a href="#ideas" data-tab="ideas"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/></svg>Идеи</a>
   <a href="#notes" data-tab="notes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg>Заметки</a>
+  <a href="#docs" data-tab="docs"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Документы</a>
   <a href="#setup" data-tab="setup"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>Настройки</a>
 </nav>
 <div class="sheet-bg" id="editBg" hidden>
@@ -578,6 +635,7 @@ a.btn{color:var(--fg)}
     <div class="fld" id="eDaysW" hidden><span class="lbl">Дни недели</span><div class="days" id="eDays"></div></div>
     <label class="fld" id="eUntilW" hidden><span class="lbl">Повторять до (необязательно)</span><input type="date" id="eUntil"></label>
     <label class="fld"><span class="lbl">Заметка</span><textarea id="eNote" rows="2"></textarea></label>
+    <div class="fld" id="eDocsW"><span class="lbl">Документы</span><div class="att" id="eDocs"></div><div class="row"><label class="btn sm" style="cursor:pointer"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg> Прикрепить файл<input type="file" id="eDocIn" multiple hidden></label></div><div class="dprog" id="eDocProg"></div></div>
     <label class="row" style="font-size:14px"><input type="checkbox" id="eDone"> <span id="eDoneL">Выполнено</span></label>
     <div class="delchoice" id="eDelChoice" hidden><span>Удалить:</span><button type="button" class="btn sm" id="eDelOne"></button><button type="button" class="btn sm danger" id="eDelAll">Все повторения</button><button type="button" class="btn sm ghost" id="eDelNo">Отмена</button></div>
     <div class="row" style="justify-content:space-between">
@@ -585,6 +643,18 @@ a.btn{color:var(--fg)}
       <div class="row"><button type="button" class="btn ghost" id="eCancel">Отмена</button><button class="btn primary" type="submit">Сохранить</button></div>
     </div>
   </form>
+</div>
+<div class="sheet-bg" id="docBg" hidden>
+  <div class="sheet dview" role="dialog" aria-modal="true" aria-labelledby="dvT">
+    <div class="ag-head" style="align-items:center"><h2 id="dvT" style="font-size:18px">Документ</h2><button type="button" class="del" id="dvX" aria-label="Закрыть"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="ffld"><input id="dvName" aria-label="Название файла" style="border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 10px;min-width:0"><select id="dvCat" class="btn sm" aria-label="Раздел"></select></div>
+    <div class="hint" id="dvMeta"></div>
+    <div class="dbody" id="dvBody"></div>
+    <div class="row" style="justify-content:space-between">
+      <button type="button" class="btn ghost danger" id="dvDel">Удалить</button>
+      <div class="row"><a class="btn" id="dvOpen" target="_blank" rel="noopener" hidden>Открыть в новой вкладке</a><button type="button" class="btn primary" id="dvSave">Скачать</button></div>
+    </div>
+  </div>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -816,7 +886,7 @@ function renderGh(){
 }
 
 /* ---------- routing ---------- */
-const TABS={"":"cal","#ideas":"ideas","#notes":"notes","#setup":"setup"};
+const TABS={"":"cal","#ideas":"ideas","#notes":"notes","#docs":"docs","#setup":"setup"};
 const tab=()=>TABS[location.hash]||"cal";
 const PH={
   cal:"Например: завтра в 10 созвон с командой по серверу, в пятницу забрать посылку, в четверг по Найдём предков настроить VPN новому сотруднику, каждый понедельник в 9 планёрка в КАДИС",
@@ -833,14 +903,15 @@ function render(){
   $("#todayLine").textContent=`Сегодня ${t.getDate()} ${MONTHS[t.getMonth()]}, ${DOW[t.getDay()]}`;
   $$("#filter button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.c===filter));
   $$("[data-tab]").forEach(a=>{if(a.dataset.tab===cur)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
-  ["cal","ideas","notes","setup"].forEach(k=>$("#tab-"+k).hidden=k!==cur);
-  $("#inbox").hidden=cur==="setup";
+  ["cal","ideas","notes","docs","setup"].forEach(k=>$("#tab-"+k).hidden=k!==cur);
+  $("#inbox").hidden=cur==="setup"||cur==="docs";
   $("#voice").placeholder=PH[cur]||"";
   const open=byFilter(ofKind("task")).filter(x=>x.repeat&&x.repeat.freq?!(x.repeat.until&&x.repeat.until<iso(t)):(!x.done&&x.date>=iso(t))).length;
-  $("#cntCal").textContent=open||"";$("#cntIdeas").textContent=byFilter(ofKind("idea")).length||"";$("#cntNotes").textContent=byFilter(ofKind("note")).length||"";
+  $("#cntCal").textContent=open||"";$("#cntIdeas").textContent=byFilter(ofKind("idea")).length||"";$("#cntNotes").textContent=byFilter(ofKind("note")).length||"";$("#cntDocs").textContent=byFilter(ofKind("doc")).length||"";
   if(cur==="cal"){renderCal();renderAgenda();renderUpcoming()}
   if(cur==="ideas")renderIdeas();
   if(cur==="notes")renderNotes();
+  if(cur==="docs")renderDocs();
   if(cur==="setup"){renderWSettings();renderGh();renderNf();renderWgPanel()}
 }
 
@@ -860,7 +931,7 @@ function renderCal(){
   $("#cal").innerHTML=h;
 }
 function taskLi(t,mode){
-  const meta=[t.repeat&&t.repeat.freq?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> ${repLabel(t)}`:"",!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",mode==="due"&&t.date?"начало "+fmtDate(fromIso(t.date)):"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":""].filter(Boolean).join(" · ");
+  const meta=[t.repeat&&t.repeat.freq?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg> ${repLabel(t)}`:"",!t.done&&remShort(t)?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg> ${remShort(t)}`:"",mode==="due"&&t.date?"начало "+fmtDate(fromIso(t.date)):"",filter==="all"?CAT[t.cat]:"",t.ex?"пример":"",t.ex?"":docCount(t.id)].filter(Boolean).join(" · ");
   const dm=mode==="due";
   return `<li class="task ${t.cat}${t.done?" done":""}${t.ex?" example":""}${dm?" due-mode":""}" data-id="${t.id}"${t.occ?` data-occ="${t.occ}"`:""}>
     <input type="checkbox" class="chk" ${t.done?"checked":""} ${t.ex?"disabled":""} aria-label="Готово">
@@ -979,6 +1050,7 @@ function renderNotes(){
   $("#nCat").value=n.cat||"work";
   $("#nSaved").textContent=n.ex?"":"Изменено "+fmtDate(n.updated||Date.now())+", "+new Date(n.updated||Date.now()).toTimeString().slice(0,5);
   $("#nEx").textContent=n.ex?"Это пример. Начните печатать, и он станет вашей заметкой.":"";
+  renderAtt("#nDocs",{noteId:n.id});
 }
 function currentNote(){return notesAll().find(x=>x.id===openNote)}
 function scheduleNoteSave(){
@@ -1528,6 +1600,7 @@ function openEdit(id,occ){
   $("#eRep").innerHTML=freqOptions(rp?rp.freq:"");eDays=rp&&rp.days&&rp.days.length?[...rp.days]:[fromIso(t.date).getDay()];
   $("#eUntil").value=rp&&rp.until||"";renderEDays();
   $("#editT").textContent=rp?"Изменить повторяющееся дело":"Изменить дело";
+  renderAtt("#eDocs",{taskId:id});$("#eDocProg").innerHTML="";
   eDelArm=0;$("#eDel").textContent="Удалить";$("#eDelChoice").hidden=true;$("#editBg").hidden=false;setTimeout(()=>$("#eTitle").focus(),30);
 }
 $("#eRep").addEventListener("change",()=>{if(!eDays.length)eDays=[fromIso($("#eDate").value||iso(today())).getDay()];renderEDays()});
@@ -1561,6 +1634,218 @@ $("#editBg").addEventListener("click",e=>{if(e.target===$("#editBg"))closeEdit()
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#editBg").hidden)closeEdit()});
 document.addEventListener("click",e=>{const b=e.target.closest(".task [data-edit]");if(b){const li=b.closest(".task");openEdit(li.dataset.id,li.dataset.occ)}});
 
+const DOC_LS="pl";
+
+/* ---------- documents ---------- */
+const DOC_DIRECT=["application/pdf","image/png","image/jpeg","image/gif","image/webp","video/mp4","video/webm"];
+const MB=1048576,DOC_MAX_GH=25*MB,DOC_MAX_CL_DIRECT=20*MB,DOC_MAX_CL_WRAP=14*MB;
+const MIME={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",gif:"image/gif",webp:"image/webp",heic:"image/heic",svg:"image/svg+xml",mp4:"video/mp4",webm:"video/webm",mov:"video/quicktime",txt:"text/plain",csv:"text/csv",md:"text/markdown",json:"application/json",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",xls:"application/vnd.ms-excel",xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",ppt:"application/vnd.ms-powerpoint",pptx:"application/vnd.openxmlformats-officedocument.presentationml.presentation",odt:"application/vnd.oasis.opendocument.text",ods:"application/vnd.oasis.opendocument.spreadsheet",rtf:"application/rtf",zip:"application/zip",rar:"application/vnd.rar","7z":"application/x-7z-compressed",ged:"text/plain",gno:"application/octet-stream"};
+const extOf=n=>((String(n||"").match(/\.([^.\/]+)$/)||[])[1]||"").toLowerCase();
+const mimeOf=(name,t)=>t&&t!=="application/octet-stream"?t:(MIME[extOf(name)]||t||"application/octet-stream");
+function docKind(d){const e=extOf(d.name||d.title),t=d.type||"";
+  if(e==="pdf"||t==="application/pdf")return ["pdf","PDF"];
+  if(/^(docx?|odt|rtf|pages)$/.test(e))return ["doc",e==="rtf"?"RTF":"DOC"];
+  if(/^(xlsx?|ods|csv|numbers)$/.test(e))return ["xls",e==="csv"?"CSV":"XLS"];
+  if(/^(pptx?|odp|key)$/.test(e))return ["ppt","PPT"];
+  if(t.startsWith("image/")||/^(png|jpe?g|gif|webp|heic|svg|bmp|tiff?)$/.test(e))return ["img",(e||"IMG").slice(0,4).toUpperCase()];
+  if(t.startsWith("video/")||/^(mp4|mov|webm|avi|mkv)$/.test(e))return ["vid","VID"];
+  if(/^(zip|rar|7z|gz|tar)$/.test(e))return ["zip",e.toUpperCase()];
+  if(t.startsWith("text/")||/^(txt|md|json|ged|xml|log)$/.test(e))return ["txt",(e||"TXT").slice(0,4).toUpperCase()];
+  return ["oth",(e||"FILE").slice(0,4).toUpperCase()];
+}
+const fmtSize=b=>b<1024?b+" Б":b<MB?Math.max(1,Math.round(b/1024))+" КБ":(b/MB).toFixed(b<10*MB?1:0).replace(".",",")+" МБ";
+const docsAll=()=>ofKind("doc");
+const docTitle=d=>d.title||d.name||"Файл";
+let assetsNS=null,assetsTried=false;
+async function getAssets(){if(assetsNS||assetsTried)return assetsNS;assetsTried=true;if(!(window.claude&&claude.use))return null;try{assetsNS=await claude.use("assets")}catch(e){assetsNS=null}return assetsNS}
+const docHere=d=>d.store==="cl"?!!window.claude:d.store==="gh"?!window.claude:false;
+const docReady=d=>d.store==="cl"?!!window.claude:d.store==="gh"?(!window.claude&&ghOn()):false;
+function docWhereMsg(d){
+  if(d.store==="cl"&&!window.claude)return "Этот файл загружен в версии планера на claude.ai. Откройте его там.";
+  if(d.store==="gh"&&window.claude)return "Этот файл хранится в версии планера на GitHub. Откройте его там.";
+  if(d.store==="gh"&&!ghOn())return "Файл хранится на GitHub. Подключите синхронизацию в Настройках, чтобы открыть его.";
+  return "";
+}
+function fileB64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(",")[1]||"");r.onerror=()=>rej(r.error);r.readAsDataURL(file)})}
+function b64Blob(b64,type){const bin=atob(String(b64).replace(/\s/g,""));const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type})}
+const safeName=n=>String(n||"file").replace(/[\\\/:*?"<>|#%{}^~\[\]`\s]+/g,"_").replace(/^\.+/,"").slice(-90)||"file";
+const ghFileUrl=p=>`https://api.github.com/repos/${gh.repo}/contents/${p.split("/").map(encodeURIComponent).join("/")}`;
+function docErr(e){
+  if(typeof e==="string")return e;
+  const c=e&&e.code;
+  if(c==="too_large")return "файл слишком большой";
+  if(c==="unsupported_type")return "такой тип файла здесь не принимается";
+  if(c==="quota_exceeded"||c==="storage_full")return "место для файлов закончилось";
+  if(c==="not_granted")return "загрузка файлов здесь недоступна";
+  const st=e&&e.status;
+  if(st===401)return "токен GitHub не подходит или истёк";
+  if(st===403)return "у токена нет права записи";
+  if(st===404)return "файл не найден";
+  if(st===409||st===422)return "GitHub не принял файл, попробуйте ещё раз";
+  if(e instanceof TypeError)return "нет связи";
+  return "не получилось"+(st?" (ошибка "+st+")":"");
+}
+async function storeFile(file,extra={}){
+  const id=uid(),type=mimeOf(file.name,file.type);
+  const meta={id,kind:"doc",title:file.name,name:file.name,type,size:file.size,cat:extra.cat||docDefCat(),created:Date.now()};
+  if(extra.taskId)meta.taskId=extra.taskId;if(extra.noteId)meta.noteId=extra.noteId;
+  if(window.claude){
+    const A=await getAssets();if(!A)throw "загрузка файлов здесь недоступна";
+    if(DOC_DIRECT.includes(type)){
+      if(file.size>DOC_MAX_CL_DIRECT)throw "больше 20 МБ";
+      const r=await A.upload(file,{type});meta.asset=r.id;
+    }else{
+      if(file.size>DOC_MAX_CL_WRAP)throw "больше 14 МБ";
+      const b64=await fileB64(file);const r=await A.upload(new Blob([b64],{type:"text/plain"}),{type:"text/plain"});meta.asset=r.id;meta.enc="b64";
+    }
+    meta.store="cl";
+  }else{
+    if(!ghOn())throw "сначала подключите синхронизацию через GitHub в Настройках";
+    if(file.size>DOC_MAX_GH)throw "больше 25 МБ";
+    const path="files/"+id+"-"+safeName(file.name);
+    const b64=await fileB64(file);
+    const r=await fetch(ghFileUrl(path),{method:"PUT",headers:ghHeaders({"Content-Type":"application/json"}),body:JSON.stringify({message:"Планер: новый файл",content:b64})});
+    if(!r.ok)throw r;
+    meta.store="gh";meta.path=path;
+  }
+  save(meta,{silent:true});
+  return meta;
+}
+async function docBlob(d){
+  if(d.store==="cl"){
+    const r=await fetch("/_blob/"+d.asset,{cache:"no-store"});if(!r.ok)throw r;
+    if(d.enc==="b64")return b64Blob(await r.text(),d.type||"application/octet-stream");
+    const b=await r.blob();return new Blob([b],{type:d.type||b.type});
+  }
+  if(d.store==="gh"){
+    if(!ghOn())throw "подключите синхронизацию через GitHub";
+    const r=await fetch(ghFileUrl(d.path),{cache:"no-store",headers:ghHeaders({Accept:"application/vnd.github.raw+json"})});if(!r.ok)throw r;
+    const b=await r.blob();return new Blob([b],{type:d.type||b.type});
+  }
+  throw "файл недоступен";
+}
+async function dropDocFile(d){
+  try{
+    if(d.store==="cl"&&window.claude){const A=await getAssets();if(A&&d.asset)await A.delete(d.asset)}
+    else if(d.store==="gh"&&ghOn()&&d.path){
+      const m=await fetch(ghFileUrl(d.path),{cache:"no-store",headers:ghHeaders()});
+      if(m.ok){const j=await m.json();await fetch(ghFileUrl(d.path),{method:"DELETE",headers:ghHeaders({"Content-Type":"application/json"}),body:JSON.stringify({message:"Планер: файл удалён",sha:j.sha})})}
+    }
+  }catch(e){}
+}
+async function deleteDoc(id){const d=items.find(x=>x.id===id);if(!d)return;remove(id);await dropDocFile(d)}
+function docDefCat(){const v=$("#docCat")&&$("#docCat").value;return CATS.includes(v)?v:(filter!=="all"?filter:CATS[0])}
+function docLinkLabel(d){
+  if(d.taskId){const t=items.find(x=>x.id===d.taskId&&!x.deleted);if(t)return "к делу «"+t.title+"»"}
+  if(d.noteId){const n=items.find(x=>x.id===d.noteId&&!x.deleted);if(n)return "к заметке «"+(n.title||"Без названия")+"»"}
+  return "";
+}
+function docCount(taskId){const n=docsAll().filter(d=>d.taskId===taskId).length;return n?`<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="vertical-align:-1px"><path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></svg> ${n}`:""}
+const catSel=v=>CATS.map(k=>`<option value="${k}"${k===v?" selected":""}>${CAT[k]}</option>`).join("");
+$("#docCat").innerHTML=catSel(ls.get(DOC_LS+".docCat",filter!=="all"?filter:CATS[0]));
+$("#docCat").onchange=e=>ls.set(DOC_LS+".docCat",e.target.value);
+function renderDocs(){
+  const q=$("#docSearch").value.trim().toLowerCase();
+  const all=byFilter(docsAll()),list=all.filter(d=>!q||docTitle(d).toLowerCase().includes(q)).sort((a,b)=>(b.created||0)-(a.created||0));
+  const inCl=!!window.claude,note=$("#docNote");
+  $("#docLimit").textContent=inCl?"PDF и картинки до 20 МБ, Word, Excel и другие файлы до 14 МБ":"PDF, Word, Excel, картинки и любые другие файлы до 25 МБ";
+  if(!inCl&&!ghOn()){note.hidden=false;note.textContent="Файлы хранятся в вашем приватном репозитории на GitHub. Сначала подключите синхронизацию в Настройках, тогда загрузка заработает.";}
+  else if(inCl&&!col){note.hidden=false;note.textContent="Файлы сохраняются, когда вы вошли в аккаунт Claude. Если загрузка не работает, обновите страницу.";}
+  else note.hidden=true;
+  const total=all.reduce((s,d)=>s+(d.size||0),0);
+  $("#docUsage").textContent=all.length?`${all.length} ${plural(all.length,["файл","файла","файлов"])} · ${fmtSize(total)}`:"";
+  $("#docList").innerHTML=list.length?list.map(d=>{const [k,l]=docKind(d),off=!docHere(d),link=docLinkLabel(d);
+    const meta=[fmtSize(d.size||0),fmtDate(d.created||Date.now()),filter==="all"?CAT[d.cat]||"":"",link,off?(d.store==="cl"?"в версии на claude.ai":"в версии на GitHub"):""].filter(Boolean).join(" · ");
+    return `<li class="drow${off?" off":""}" data-id="${d.id}"><span class="dic ${k}" aria-hidden="true">${l}</span><button type="button" class="dn" data-open><b>${esc(docTitle(d))}</b><small>${esc(meta)}</small></button><button type="button" class="del" data-ddel aria-label="Удалить файл">${X}</button></li>`}).join("")
+    :`<li class="empty">${q?"Ничего не найдено":"Файлов пока нет. Загрузите первый: договор, скан, таблицу или фото."}</li>`;
+}
+function renderAtt(sel,f){
+  const el=$(sel);if(!el)return;
+  const list=docsAll().filter(d=>(f.taskId&&d.taskId===f.taskId)||(f.noteId&&d.noteId===f.noteId));
+  el.innerHTML=list.map(d=>{const [k,l]=docKind(d);return `<button type="button" class="achip" data-doc="${d.id}" title="${esc(docTitle(d))}"><i class="${k}">${l}</i><span>${esc(docTitle(d))}</span></button>`}).join("");
+}
+async function uploadMany(files,extra={},progEl){
+  files=[...files];if(!files.length)return [];
+  const prog=progEl||$("#docProg");const done=[];
+  prog.innerHTML=files.map((f,i)=>`<div data-i="${i}">${esc(f.name)}: загружаю…</div>`).join("");
+  for(let i=0;i<files.length;i++){
+    const row=prog.querySelector(`[data-i="${i}"]`);
+    try{const m=await storeFile(files[i],extra);done.push(m);if(row)row.textContent=files[i].name+": готово"}
+    catch(e){if(row){row.className="bad";row.textContent=files[i].name+": "+docErr(e)}}
+  }
+  render();
+  if(done.length)toast(done.length===1?"Файл загружен":"Загружено файлов: "+done.length);
+  setTimeout(()=>{if(!prog.querySelector(".bad"))prog.innerHTML=""},3000);
+  return done;
+}
+const drop=$("#drop");
+$("#docInput").onchange=e=>{const fs=e.target.files;uploadMany(fs).finally(()=>{e.target.value=""})};
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const fs=e.dataTransfer&&e.dataTransfer.files;if(fs&&fs.length)uploadMany(fs)});
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("#docInput").click()}});
+drop.tabIndex=0;
+$("#docSearch").addEventListener("input",renderDocs);
+$("#docList").addEventListener("click",e=>{
+  const li=e.target.closest(".drow");if(!li)return;
+  if(e.target.closest("[data-open]")){openDoc(li.dataset.id);return}
+  const b=e.target.closest("[data-ddel]");if(!b)return;
+  if(!b.dataset.arm){b.dataset.arm="1";b.title="Нажмите ещё раз, чтобы удалить";toast("Нажмите крестик ещё раз, чтобы удалить файл");setTimeout(()=>{delete b.dataset.arm},3000);return}
+  deleteDoc(li.dataset.id).then(()=>toast("Файл удалён"));
+});
+document.addEventListener("click",e=>{const c=e.target.closest(".achip[data-doc]");if(c){e.preventDefault();openDoc(c.dataset.doc)}});
+/* viewer */
+let dvId=null,dvUrl=null,dvBlob=null,dvArm=0,dvFocus=null;
+function closeDoc(){$("#docBg").hidden=true;dvId=null;dvBlob=null;if(dvUrl){URL.revokeObjectURL(dvUrl);dvUrl=null}$("#dvBody").innerHTML="";if(dvFocus&&dvFocus.focus)try{dvFocus.focus()}catch(e){}}
+async function openDoc(id){
+  const d=items.find(x=>x.id===id&&!x.deleted);if(!d)return;
+  dvId=id;dvBlob=null;dvArm=0;dvFocus=document.activeElement;if(dvUrl){URL.revokeObjectURL(dvUrl);dvUrl=null}
+  $("#dvName").value=docTitle(d);$("#dvCat").innerHTML=catSel(d.cat);
+  $("#dvMeta").textContent=[fmtSize(d.size||0),"загружен "+fmtDate(d.created||Date.now()),docLinkLabel(d)].filter(Boolean).join(" · ");
+  $("#dvDel").textContent="Удалить";$("#dvOpen").hidden=true;$("#dvSave").disabled=true;
+  const body=$("#dvBody");$("#docBg").hidden=false;
+  const why=docWhereMsg(d);
+  if(why||!docReady(d)){body.innerHTML=`<div class="msg">${esc(why||"Файл сейчас недоступен.")}</div>`;return}
+  body.innerHTML=`<div class="msg">Загружаю…</div>`;
+  const [k]=docKind(d),t=d.type||"";
+  try{
+    if(d.store==="cl"&&!d.enc&&DOC_DIRECT.includes(t)){
+      const u="/_blob/"+d.asset;
+      if(t.startsWith("image/"))body.innerHTML=`<img src="${u}" alt="${esc(docTitle(d))}">`;
+      else if(t.startsWith("video/"))body.innerHTML=`<video src="${u}" controls></video>`;
+      else body.innerHTML=`<div class="msg">PDF откроется в новой вкладке. Можно и скачать.</div>`;
+      const a=$("#dvOpen");a.href=u;a.hidden=false;$("#dvSave").disabled=false;if(dvId!==id)return;return;
+    }
+    const b=await docBlob(d);if(dvId!==id)return;dvBlob=b;dvUrl=URL.createObjectURL(b);$("#dvSave").disabled=false;
+    const a=$("#dvOpen");a.href=dvUrl;a.hidden=window.claude?true:false;
+    if(k==="img"&&!/heic|tiff?/i.test(extOf(d.name)))body.innerHTML=`<img src="${dvUrl}" alt="${esc(docTitle(d))}">`;
+    else if(k==="vid")body.innerHTML=`<video src="${dvUrl}" controls></video>`;
+    else if(k==="pdf"&&!window.claude)body.innerHTML=`<iframe src="${dvUrl}" title="${esc(docTitle(d))}"></iframe>`;
+    else if(k==="txt"||t.startsWith("text/")||t==="application/json"){const tx=await b.slice(0,200000).text();body.innerHTML=`<pre>${esc(tx)}</pre>`}
+    else body.innerHTML=`<div class="msg">Предпросмотра для этого файла нет. Скачайте его или откройте в новой вкладке.</div>`;
+  }catch(e){if(dvId===id)body.innerHTML=`<div class="msg">Не удалось открыть файл: ${esc(docErr(e))}.</div>`}
+}
+$("#dvX").onclick=closeDoc;
+$("#docBg").addEventListener("click",e=>{if(e.target===$("#docBg"))closeDoc()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#docBg").hidden)closeDoc()});
+$("#dvName").addEventListener("change",e=>{const d=items.find(x=>x.id===dvId);const v=e.target.value.trim();if(!d||!v)return;save({...d,title:v},{silent:true});render();toast("Название сохранено")});
+$("#dvCat").addEventListener("change",e=>{const d=items.find(x=>x.id===dvId);if(!d)return;save({...d,cat:e.target.value},{silent:true});render()});
+$("#dvSave").onclick=async()=>{
+  const d=items.find(x=>x.id===dvId);if(!d)return;
+  let name=docTitle(d);const ex=extOf(d.name);if(ex&&extOf(name)!==ex)name+="."+ex;
+  try{const b=dvBlob||await docBlob(d);if(await saveFile(name,b,d.type||b.type))toast("Файл сохранён")}catch(e){toast("Не удалось скачать: "+docErr(e),4000)}
+};
+$("#dvDel").onclick=()=>{
+  if(Date.now()-dvArm>3000){dvArm=Date.now();$("#dvDel").textContent="Точно удалить?";setTimeout(()=>{if($("#dvDel"))$("#dvDel").textContent="Удалить"},3000);return}
+  const id=dvId;closeDoc();deleteDoc(id).then(()=>toast("Файл удалён"));
+};
+/* attachments: task editor and notes */
+$("#eDocIn").onchange=e=>{const id=editId,fs=e.target.files;if(!id||!fs.length)return;
+  uploadMany(fs,{taskId:id,cat:$("#eCat").value},$("#eDocProg")).then(()=>renderAtt("#eDocs",{taskId:id})).finally(()=>{e.target.value=""})};
+$("#nDocIn").onchange=e=>{const fs=e.target.files;const n=currentNote();
+  if(!n||n.ex){toast("Сначала напишите что-нибудь в заметке, потом прикрепите файл",4000);e.target.value="";return}
+  uploadMany(fs,{noteId:n.id,cat:n.cat},$("#nDocProg")).then(()=>renderAtt("#nDocs",{noteId:n.id})).finally(()=>{e.target.value=""})};
+
 let tt;function toast(m,ms=2600){const el=$("#toast");el.textContent=m;el.hidden=false;clearTimeout(tt);tt=setTimeout(()=>el.hidden=true,ms)}
 
 /* ---------- settings: GitHub + data transfer ---------- */
@@ -1593,6 +1878,7 @@ render();renderGh();initDb();initSample();
 if(ghOn())ghSync();
 })();
 </script>
+
 <script>
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
